@@ -2,8 +2,34 @@
 
 An interactive tutorial system that guides new users through their first token deployment.
 
+## Quick Start
+
+```tsx
+import { TutorialOverlay, useTutorial, deploymentTutorialSteps } from './components/Tutorial';
+
+function App() {
+    const tutorial = useTutorial(deploymentTutorialSteps);
+    
+    return (
+        <>
+            <button onClick={tutorial.start}>Start Tutorial</button>
+            <TutorialOverlay
+                steps={deploymentTutorialSteps}
+                currentStep={tutorial.currentStep}
+                onNext={tutorial.next}
+                onPrevious={tutorial.previous}
+                onSkip={tutorial.skip}
+                onComplete={tutorial.complete}
+                isActive={tutorial.isActive}
+            />
+        </>
+    );
+}
+```
+
 ## Features
 
+### Core Features
 - **Step-by-step guidance**: Clear instructions for each deployment step
 - **UI element highlighting**: Visual focus on relevant interface elements
 - **Progress indicator**: Shows current position in the tutorial
@@ -12,49 +38,98 @@ An interactive tutorial system that guides new users through their first token d
 - **Celebration animation**: Engaging completion experience
 - **Auto-start**: Automatically starts for first-time users
 
+### Enhanced Features
+- **Keyboard navigation**: Arrow keys, Enter, ESC
+- **Step counter**: Shows "3 / 6" progress
+- **Smooth animations**: Entrance, exit, and transitions
+- **Analytics tracking**: Track user behavior (local storage)
+- **Progress persistence**: Resume within 24 hours
+- **Settings modal**: View stats and reset tutorial
+- **Mobile optimization**: Swipe gestures and bottom sheet UI
+
+### Development Tools
+- **Tutorial Builder**: Fluent API for creating tutorials
+- **Tutorial Recorder**: Capture user interactions
+- **Tutorial Debugger**: Visual debugging tool
+- **Pre-built Templates**: Common tutorial patterns
+
 ## Components
 
 ### TutorialOverlay
+Main tutorial component with UI highlighting.
 
-The main tutorial component that displays step-by-step instructions with UI highlighting.
+### MobileTutorial
+Mobile-optimized version with swipe gestures.
 
-```tsx
-<TutorialOverlay
-  steps={deploymentTutorialSteps}
-  currentStep={tutorial.currentStep}
-  onNext={tutorial.next}
-  onPrevious={tutorial.previous}
-  onSkip={tutorial.skip}
-  onComplete={handleTutorialComplete}
-  isActive={tutorial.isActive}
-/>
-```
+### TutorialTooltip
+Standalone tooltip for custom flows.
 
 ### CompletionCelebration
+Success modal with confetti animation.
 
-A celebration modal shown when the tutorial is completed.
+### TutorialSettings
+Settings UI with analytics dashboard.
 
+### TutorialDebugger
+Development tool for testing and debugging.
+
+## Hooks
+
+### useTutorial
 ```tsx
-<CompletionCelebration 
-  isOpen={showCelebration} 
-  onClose={handleCelebrationClose} 
-/>
+const tutorial = useTutorial(steps);
+
+// Properties
+tutorial.isActive
+tutorial.currentStep
+tutorial.hasCompletedBefore
+
+// Methods
+tutorial.start()
+tutorial.next()
+tutorial.previous()
+tutorial.skip()
+tutorial.complete()
+tutorial.reset()
 ```
 
-### useTutorial Hook
-
-Manages tutorial state and progression.
-
+### useTutorialContext
 ```tsx
-const tutorial = useTutorial(deploymentTutorialSteps);
+const tutorial = useTutorialContext();
+// Same API as useTutorial, plus:
+tutorial.goToStep(index)
+tutorial.setSteps(newSteps)
+```
 
-// Available methods:
-tutorial.start();      // Start the tutorial
-tutorial.next();       // Go to next step
-tutorial.previous();   // Go to previous step
-tutorial.skip();       // Skip tutorial
-tutorial.complete();   // Complete tutorial
-tutorial.reset();      // Reset completion status
+## Utilities
+
+### TutorialBuilder
+```tsx
+import { createTutorial } from './components/Tutorial';
+
+const tutorial = createTutorial()
+    .welcome('Welcome!', 'Let\'s get started')
+    .highlight('Button', 'Click here', '[data-tutorial="btn"]')
+    .complete('Done!', 'You\'re all set!')
+    .build();
+```
+
+### TutorialRecorder
+```tsx
+import { tutorialRecorder } from './components/Tutorial';
+
+tutorialRecorder.start();
+// User interacts...
+const session = tutorialRecorder.stop();
+const steps = tutorialRecorder.generateTutorialSteps(session);
+```
+
+### TutorialAnalytics
+```tsx
+import { tutorialAnalytics } from './components/Tutorial';
+
+const events = tutorialAnalytics.getStoredAnalytics();
+const stats = tutorialAnalytics.getStats();
 ```
 
 ## Tutorial Steps
@@ -93,75 +168,136 @@ const customSteps: TutorialStep[] = [
     title: 'Step Title',
     content: 'Step description',
     targetSelector: '[data-tutorial="element-id"]',
-    position: 'bottom', // 'top' | 'bottom' | 'left' | 'right'
+    position: 'bottom',
   },
 ];
 ```
 
-### Styling
+### Using Templates
 
-The tutorial uses Tailwind CSS classes and can be customized by modifying:
-- `TutorialOverlay.tsx`: Tooltip and highlight styles
-- `CompletionCelebration.tsx`: Celebration modal styles
+```tsx
+import { TutorialTemplates } from './components/Tutorial';
+
+// Basic onboarding
+const steps = TutorialTemplates.basicOnboarding();
+
+// Feature introduction
+const steps = TutorialTemplates.featureIntro('Dark Mode', '[data-tutorial="theme"]');
+
+// Form walkthrough
+const steps = TutorialTemplates.formWalkthrough([
+    { name: 'Name', selector: '#name', description: 'Enter your name' },
+    { name: 'Email', selector: '#email', description: 'Enter your email' },
+]);
+```
 
 ## Storage
 
-Tutorial completion is stored in localStorage:
-- Key: `stellar_tutorial_completed`
-- Value: `'true'` when completed
+Tutorial data is stored in localStorage:
+- `stellar_tutorial_completed` - Completion status
+- `stellar_tutorial_analytics` - Analytics events
+- `stellar_tutorial_progress` - Progress state (24h expiry)
 
 ## Accessibility
 
-- Keyboard navigation support (Escape to close)
+- Keyboard navigation support (ESC, Arrow keys, Enter)
 - ARIA labels and roles
 - Focus management
 - Screen reader friendly
+- High contrast support
 
-## Usage Example
+## Testing
 
-```tsx
-import {
-  TutorialOverlay,
-  CompletionCelebration,
-  useTutorial,
-  deploymentTutorialSteps,
-} from './components/Tutorial';
+```bash
+# Run all tutorial tests
+npm test -- Tutorial
 
-function App() {
-  const [showCelebration, setShowCelebration] = useState(false);
-  const tutorial = useTutorial(deploymentTutorialSteps);
-
-  const handleTutorialComplete = () => {
-    tutorial.complete();
-    setShowCelebration(true);
-  };
-
-  useEffect(() => {
-    // Auto-start for first-time users
-    if (!tutorial.hasCompletedBefore) {
-      setTimeout(() => tutorial.start(), 1000);
-    }
-  }, []);
-
-  return (
-    <>
-      {/* Your app content */}
-      
-      <TutorialOverlay
-        steps={deploymentTutorialSteps}
-        currentStep={tutorial.currentStep}
-        onNext={tutorial.next}
-        onPrevious={tutorial.previous}
-        onSkip={tutorial.skip}
-        onComplete={handleTutorialComplete}
-        isActive={tutorial.isActive}
-      />
-      
-      <CompletionCelebration 
-        isOpen={showCelebration} 
-        onClose={() => setShowCelebration(false)} 
-      />
-    </>
-  );
-}
+# Run specific tests
+npm test -- useTutorial.test.ts
+npm test -- tutorialAnalytics.test.ts
+npm test -- tutorialProgress.test.ts
 ```
+
+## Documentation
+
+- **README.md** (this file) - Component overview
+- **TUTORIAL_IMPLEMENTATION.md** - Initial implementation details
+- **TUTORIAL_QUICK_START.md** - Quick start guide
+- **TUTORIAL_FLOW.md** - Visual flow diagrams
+- **TUTORIAL_ENHANCEMENTS.md** - Enhancement documentation
+- **TUTORIAL_ADVANCED_FEATURES.md** - Advanced features guide
+- **TUTORIAL_COMPLETE_SUMMARY.md** - Complete system summary
+
+## Browser Support
+
+- Chrome/Edge 90+
+- Firefox 88+
+- Safari 14+
+- Mobile browsers (iOS Safari, Chrome Mobile)
+
+## Performance
+
+- Initial load: ~15KB gzipped
+- Runtime: Minimal overhead
+- Storage: ~1-2KB per session
+- Animations: Hardware-accelerated CSS
+
+## Troubleshooting
+
+**Tutorial won't start?**
+- Clear localStorage: `localStorage.removeItem('stellar_tutorial_completed')`
+- Refresh the page
+
+**Element not highlighting?**
+- Check the `data-tutorial` attribute exists
+- Verify the selector in `tutorialSteps.ts`
+
+**Want to test again?**
+- Use browser DevTools Console: `localStorage.removeItem('stellar_tutorial_completed')`
+- Or click "Start Tutorial" button in header
+
+## Development
+
+### Debug Mode
+```tsx
+import { TutorialDebugger } from './components/Tutorial';
+
+<TutorialDebugger isOpen={true} onClose={() => {}} />
+```
+
+### Recording Sessions
+```tsx
+import { tutorialRecorder } from './components/Tutorial';
+
+// Start recording
+tutorialRecorder.start();
+
+// Stop and get session
+const session = tutorialRecorder.stop();
+
+// Generate steps
+const steps = tutorialRecorder.generateTutorialSteps(session);
+```
+
+## API Reference
+
+See individual component files for detailed API documentation:
+- `TutorialOverlay.tsx` - Main overlay props
+- `useTutorial.ts` - Hook API
+- `TutorialBuilder.ts` - Builder methods
+- `TutorialRecorder.ts` - Recorder API
+- `tutorialAnalytics.ts` - Analytics methods
+
+## Contributing
+
+When adding new features:
+1. Add tests
+2. Update documentation
+3. Test on mobile
+4. Verify accessibility
+5. Check performance
+
+## License
+
+Part of the Stellar Token Deployer project.
+
