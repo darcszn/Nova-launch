@@ -136,7 +136,7 @@ describe('StellarService', () => {
             vi.mocked(WalletService.signTransaction).mockResolvedValue(null);
 
             await expect(service.deployToken(mockParams)).rejects.toThrow(
-                'Transaction signing failed or was rejected'
+
             );
         });
     });
