@@ -1,4 +1,6 @@
+/// <reference types="vite/client" />
 import { defineConfig } from 'vite'
+// @ts-expect-error - plugin-react types will be available after npm install
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
@@ -11,7 +13,7 @@ export default defineConfig({
     assetsInlineLimit: 4096,
     rollupOptions: {
       output: {
-        manualChunks(id: string) {
+        manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('react')) {
               return 'react-vendor'
