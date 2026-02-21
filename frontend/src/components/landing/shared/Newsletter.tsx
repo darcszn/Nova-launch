@@ -20,12 +20,12 @@ export function Newsletter() {
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         placeholder="Enter your email"
-        className="h-11 w-full rounded-xl border border-gray-300 px-4 text-sm outline-none ring-0 transition focus:border-sky-500"
+        className="h-11 w-full rounded-card border border-border-medium bg-background-elevated px-4 text-sm text-text-primary outline-none ring-0 transition focus:border-primary"
         required
       />
       <button
         type="submit"
-        className="h-11 whitespace-nowrap rounded-xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-700"
+        className="h-11 whitespace-nowrap rounded-card bg-primary px-5 text-sm font-semibold text-text-primary transition hover:opacity-90 hover:shadow-glow-red"
       >
         Join updates
       </button>

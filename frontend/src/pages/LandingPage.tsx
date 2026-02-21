@@ -1,8 +1,24 @@
 import { useCallback, useEffect, useRef } from "react";
 import { FAQ, Features, Footer, Hero, HowItWorks } from "../components/landing";
 import { LANDING_SCROLL_ORDER } from "../components/landing/sectionIds";
+import {
+  PWAInstallButton,
+  PWAConnectionStatus,
+} from "../components/PWA";
+import { NetworkToggle, WalletInfo } from "../components/WalletConnect";
+import { Button } from "../components/UI";
+import type { WalletState } from "../types";
 
 const SCROLL_DURATION_MS = 700;
+
+interface LandingPageProps {
+  network: "testnet" | "mainnet";
+  setNetwork: (network: "testnet" | "mainnet") => void;
+  wallet: WalletState;
+  connect: () => Promise<void>;
+  disconnect: () => void;
+  isConnecting: boolean;
+}
 
 function easeInOutCubic(progress: number): number {
   return progress < 0.5
@@ -10,7 +26,14 @@ function easeInOutCubic(progress: number): number {
     : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 }
 
-export default function LandingPage() {
+export default function LandingPage({
+  network,
+  setNetwork,
+  wallet,
+  connect,
+  disconnect,
+  isConnecting,
+}: LandingPageProps) {
   const animationRef = useRef<number | null>(null);
 
   const stopCurrentScroll = useCallback(() => {
@@ -96,7 +119,24 @@ export default function LandingPage() {
   }, [scrollToSection]);
 
   return (
-    <main className="landing-page bg-gray-50 text-left">
+    <main className="landing-page dark bg-background-dark text-left text-text-primary">
+      <header className="border-b border-border-subtle bg-background-dark/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
+          <p className="text-sm font-semibold tracking-wide text-text-secondary">NovaLaunch</p>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <PWAConnectionStatus />
+            <PWAInstallButton />
+            <NetworkToggle network={network} onNetworkChange={setNetwork} />
+            {wallet.connected && wallet.address ? (
+              <WalletInfo wallet={wallet} onDisconnect={disconnect} />
+            ) : (
+              <Button size="sm" onClick={() => void connect()} loading={isConnecting}>
+                Connect Wallet
+              </Button>
+            )}
+          </div>
+        </div>
+      </header>
       <Hero />
       <Features />
       <HowItWorks />

@@ -6,9 +6,9 @@ interface BentoCardProps {
 
 export function BentoCard({ title, description, className = "" }: BentoCardProps) {
   return (
-    <article className={`rounded-2xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
-      <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-gray-600">{description}</p>
+    <article className={`rounded-card border border-border-medium bg-background-card p-6 shadow-card-hover ${className}`}>
+      <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-text-secondary">{description}</p>
     </article>
   );
 }

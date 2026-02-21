@@ -19,7 +19,7 @@ export function Accordion({ items }: AccordionProps) {
         const isOpen = openItemId === item.id;
 
         return (
-          <article key={item.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          <article key={item.id} className="overflow-hidden rounded-card border border-border-medium bg-background-card">
             <h3>
               <button
                 type="button"
@@ -28,12 +28,12 @@ export function Accordion({ items }: AccordionProps) {
                 aria-controls={`${item.id}-panel`}
                 onClick={() => setOpenItemId(isOpen ? "" : item.id)}
               >
-                <span className="font-medium text-gray-900">{item.title}</span>
-                <span className="text-gray-500">{isOpen ? "−" : "+"}</span>
+                <span className="font-medium text-text-primary">{item.title}</span>
+                <span className="text-text-muted">{isOpen ? "−" : "+"}</span>
               </button>
             </h3>
             {isOpen ? (
-              <div id={`${item.id}-panel`} className="border-t border-gray-100 px-5 py-4 text-sm leading-6 text-gray-600">
+              <div id={`${item.id}-panel`} className="border-t border-border-subtle px-5 py-4 text-sm leading-6 text-text-secondary">
                 {item.content}
               </div>
             ) : null}

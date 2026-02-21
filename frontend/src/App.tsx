@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import LandingPage from "./pages/LandingPage";
-import DeployPage from "./pages/DeployPage";
 import NotFoundRoute from "./routes/NotFoundRoute";
 import { useNetwork } from "./hooks/useNetwork";
 import { useWallet } from "./hooks/useWallet";
@@ -15,7 +14,7 @@ function normalizePath(pathname: string): string {
 function App() {
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname));
   const { network, setNetwork } = useNetwork();
-  const { wallet, connect, disconnect, isConnecting, error } = useWallet({ network });
+  const { wallet, connect, disconnect, isConnecting } = useWallet({ network });
 
   useEffect(() => {
     const handlePopState = () => {
@@ -68,26 +67,21 @@ function App() {
   }, [pathname]);
 
   const page = useMemo(() => {
-    if (pathname === "/") {
-      return <LandingPage />;
-    }
-
-    if (pathname === "/deploy") {
+    if (pathname === "/" || pathname === "/deploy") {
       return (
-        <DeployPage
+        <LandingPage
           network={network}
           setNetwork={setNetwork}
           wallet={wallet}
           connect={connect}
           disconnect={disconnect}
           isConnecting={isConnecting}
-          error={error}
         />
       );
     }
 
     return <NotFoundRoute />;
-  }, [pathname, network, setNetwork, wallet, connect, disconnect, isConnecting, error]);
+  }, [pathname, network, setNetwork, wallet, connect, disconnect, isConnecting]);
 
   return page;
 }
