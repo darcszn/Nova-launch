@@ -1,9 +1,6 @@
 use super::*;
 use proptest::prelude::*;
-use soroban_sdk::{
-    testutils::{Address as _},
-    Address, Env, String as SorobanString,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
 
 fn setup_test_env() -> (Env, TokenFactoryClient<'static>, Address, Address) {
     let env = Env::default();
@@ -29,13 +26,13 @@ proptest! {
         fee_shortfall in 1i128..70_000_000i128,
     ) {
         let (env, client, _admin, _treasury) = setup_test_env();
-        
+
         let state_before = client.get_state();
         let insufficient_fee = 70_000_000 - fee_shortfall;
-        
+
         // Property: fee < minimum MUST fail
         prop_assert!(insufficient_fee < state_before.base_fee);
-        
+
         // Verify state unchanged after failed operation
         let state_after = client.get_state();
         prop_assert_eq!(state_after.base_fee, state_before.base_fee);
@@ -58,9 +55,9 @@ proptest! {
         let treasury = Address::generate(&env);
 
         client.initialize(&admin, &treasury, &base_fee, &metadata_fee);
-        
+
         let state = client.get_state();
-        
+
         // Property: exact fee amount is valid
         prop_assert_eq!(state.base_fee, base_fee);
         prop_assert_eq!(state.metadata_fee, metadata_fee);
@@ -81,12 +78,12 @@ proptest! {
         let treasury = Address::generate(&env);
 
         client.initialize(&admin, &treasury, &base_fee, &30_000_000);
-        
+
         let state = client.get_state();
-        
+
         // Property: boundary at exact fee value
         prop_assert_eq!(state.base_fee, base_fee);
-        
+
         // Property: fee - 1 would be insufficient
         let insufficient = base_fee - 1;
         prop_assert!(insufficient < state.base_fee);
@@ -108,9 +105,9 @@ proptest! {
 
         // Initialize with non-zero fees
         client.initialize(&admin, &treasury, &1, &metadata_fee);
-        
+
         let state = client.get_state();
-        
+
         // Property: zero would be insufficient
         prop_assert!(0 < state.base_fee);
         prop_assert_eq!(state.base_fee, 1);
@@ -132,7 +129,7 @@ proptest! {
 
         // Try with negative base fee
         let result = client.try_initialize(&admin, &treasury, &-1, &positive_fee);
-        
+
         // Property: negative fees MUST be rejected
         prop_assert!(result.is_err());
     }
@@ -153,14 +150,14 @@ proptest! {
         let treasury = Address::generate(&env);
 
         client.initialize(&admin, &treasury, &initial_base_fee, &initial_metadata_fee);
-        
+
         let state_before = client.get_state();
-        
+
         // Attempt invalid fee update (negative)
         let _ = client.try_update_fees(&admin, &Some(-1), &None);
-        
+
         let state_after = client.get_state();
-        
+
         // Property: state MUST remain unchanged after failed operation
         prop_assert_eq!(state_after.base_fee, state_before.base_fee);
         prop_assert_eq!(state_after.metadata_fee, state_before.metadata_fee);
@@ -182,16 +179,16 @@ proptest! {
         let treasury = Address::generate(&env);
 
         client.initialize(&admin, &treasury, &base_fee, &30_000_000);
-        
+
         let initial_state = client.get_state();
-        
+
         // Attempt multiple invalid operations
         for _ in 0..attempt_count {
             let _ = client.try_update_fees(&admin, &Some(-1), &None);
         }
-        
+
         let final_state = client.get_state();
-        
+
         // Property: state MUST be identical after multiple failed attempts
         prop_assert_eq!(final_state.base_fee, initial_state.base_fee);
         prop_assert_eq!(final_state.metadata_fee, initial_state.metadata_fee);
@@ -215,15 +212,15 @@ proptest! {
         // Initialize with fee1
         client.initialize(&admin, &treasury, &fee1, &30_000_000);
         let state1 = client.get_state();
-        
+
         // Update to fee2
         client.update_fees(&admin, &Some(fee2), &None);
         let state2 = client.get_state();
-        
+
         // Property: valid fees are always accepted consistently
         prop_assert_eq!(state1.base_fee, fee1);
         prop_assert_eq!(state2.base_fee, fee2);
-        
+
         // Property: both fees are non-negative
         prop_assert!(state1.base_fee >= 0);
         prop_assert!(state2.base_fee >= 0);
@@ -244,16 +241,16 @@ proptest! {
         let treasury = Address::generate(&env);
 
         client.initialize(&admin, &treasury, &required_fee, &0);
-        
+
         let state = client.get_state();
-        
+
         // Property: exact fee is the minimum valid amount
         prop_assert_eq!(state.base_fee, required_fee);
-        
+
         // Property: one less would be insufficient
         let one_less = required_fee - 1;
         prop_assert!(one_less < state.base_fee);
-        
+
         // Property: one more is also valid
         let one_more = required_fee + 1;
         prop_assert!(one_more > state.base_fee);
@@ -274,11 +271,11 @@ proptest! {
         let treasury = Address::generate(&env);
 
         let large_fee = if use_large { 1_000_000_000_000i128 } else { 1i128 };
-        
+
         client.initialize(&admin, &treasury, &large_fee, &0);
-        
+
         let state = client.get_state();
-        
+
         // Property: large valid fees are accepted
         prop_assert_eq!(state.base_fee, large_fee);
         prop_assert!(state.base_fee > 0);
