@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 import { healthService } from '@/lib/health';
 
 /**
- * GET /api/health
- * Basic health check endpoint
- * Returns overall status and per-service health information
+ * GET /api/health/detailed
+ * Detailed health check endpoint with metrics
+ * Returns comprehensive health information including system metrics
  */
 export async function GET() {
   try {
-    const health = await healthService.checkHealth({ timeout: 5000 });
+    const health = await healthService.checkDetailedHealth({ timeout: 5000 });
     
     const statusCode = health.status === 'healthy' ? 200 : 
                        health.status === 'degraded' ? 200 : 503;
