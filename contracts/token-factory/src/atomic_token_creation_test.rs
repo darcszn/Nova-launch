@@ -1,3 +1,6 @@
+// Suppress unused warnings for incomplete tests
+#![allow(dead_code)]
+
 use super::*;
 use proptest::prelude::*;
 use soroban_sdk::testutils::Address as _;
@@ -611,8 +614,8 @@ mod manual_atomicity_tests {
             let initial_count = client.get_token_count();
             let creator = Address::generate(&env);
 
-            let name = String::from_str(&env, &format!("Token {}", i));
-            let symbol = String::from_str(&env, &format!("TK{}", i));
+            let name = String::from_str(&env, "Token Loop");
+            let symbol = String::from_str(&env, "TKL");
 
             /*
             let result = client.try_create_token(

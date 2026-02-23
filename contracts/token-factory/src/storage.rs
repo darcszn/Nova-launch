@@ -53,6 +53,10 @@ pub fn get_token_info(env: &Env, index: u32) -> Option<TokenInfo> {
     env.storage().instance().get(&DataKey::Token(index))
 }
 
+pub fn set_token_info(env: &Env, index: u32, info: &TokenInfo) {
+    env.storage().instance().set(&DataKey::Token(index), info);
+}
+
 // Get factory state
 pub fn get_factory_state(env: &Env) -> FactoryState {
     FactoryState {
