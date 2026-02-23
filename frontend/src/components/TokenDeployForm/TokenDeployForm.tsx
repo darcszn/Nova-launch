@@ -4,7 +4,7 @@ import { useTokenDeploy } from '../../hooks/useTokenDeploy';
 import { formatXLM, truncateAddress } from '../../utils/formatting';
 import { BasicInfoStep, type BasicInfoData } from './BasicInfoStep';
 import { FeeDisplay } from './FeeDisplay';
-import { Button } from '../UI/Button';
+import { Button, ProgressBar, LoadingButton } from '../UI';
 import { analytics } from '../../services/analytics';
 import { Input } from '../UI/Input';
 
@@ -243,24 +243,37 @@ export function TokenDeployForm({
             ) : null}
 
             {isDeploying ? (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                    <p className="text-sm text-blue-800">{statusMessage}</p>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                    <p className="text-sm font-medium text-blue-800">{statusMessage}</p>
+                    <ProgressBar
+                        progress={status === 'uploading' ? 30 : status === 'deploying' ? 70 : 100}
+                        label={status === 'uploading' ? 'Uploading metadata...' : 'Deploying token...'}
+                        showPercentage={true}
+                        variant="default"
+                        size="md"
+                    />
                 </div>
             ) : null}
 
             <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setStep('basic')} className="w-full">
+                <Button 
+                    variant="outline" 
+                    onClick={() => setStep('basic')} 
+                    className="w-full"
+                    disabled={isDeploying}
+                >
                     Back
                 </Button>
-                <Button
+                <LoadingButton
                     onClick={() => void handleDeploy()}
                     loading={isDeploying}
+                    loadingText={status === 'uploading' ? 'Uploading...' : 'Deploying...'}
                     className="w-full"
                     disabled={!wallet.connected}
                     data-tutorial="deploy-button"
                 >
                     Deploy Token
-                </Button>
+                </LoadingButton>
             </div>
         </div>
     );

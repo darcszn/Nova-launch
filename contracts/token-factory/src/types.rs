@@ -24,6 +24,8 @@ pub struct TokenInfo {
     pub total_burned: i128,        // Total amount of tokens burned
     pub burn_count: u32,            // Number of burn operations
     pub clawback_enabled: bool,     // Whether admin can burn from any address
+    pub total_burned: i128,    // Total amount of tokens burned
+    pub burn_count: u32,        // Number of burn operations
 }
 
 #[contracttype]

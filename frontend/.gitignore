@@ -35,3 +35,5 @@ coverage
 
 # Vitest
 .vitest
+LOADING-*.md
+CONFIRM-*.md
