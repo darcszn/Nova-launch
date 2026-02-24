@@ -72,6 +72,25 @@ body {
   will-change: opacity;
 }
 
+.animate-fadeIn {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translate3d(0, 20px, 0);
+    opacity: 0;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;

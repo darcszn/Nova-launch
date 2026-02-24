@@ -9,6 +9,7 @@ pub struct FactoryState {
     pub treasury: Address,
     pub base_fee: i128,
     pub metadata_fee: i128,
+    pub paused: bool,
 }
 
 #[contracttype]
@@ -22,6 +23,9 @@ pub struct TokenInfo {
     pub total_supply: i128,
     pub metadata_uri: Option<String>,
     pub created_at: u64,
+    pub total_burned: i128,
+    pub burn_count: u32,
+    pub clawback_enabled: bool,
 }
 
 #[contracttype]
@@ -35,6 +39,9 @@ pub enum DataKey {
     Token(u32),            // Token index -> TokenInfo  (existing)
     Balance(u32, Address), // (token_index, holder)     -> i128   (NEW — burn)
     BurnCount(u32),        // token_index               -> u32    (NEW — burn)
+    Token(u32),
+    TokenByAddress(Address),
+    Paused,
 }
 
 #[contracterror]
@@ -52,4 +59,16 @@ pub enum Error {
     InsufficientBalance = 7, // holder balance < requested burn amount
     ArithmeticError     = 8, // checked_sub / checked_add returned None
     BatchTooLarge       = 9, // batch_burn entry count > MAX_BATCH_BURN
+    InsufficientFee = 1,
+    Unauthorized = 2,
+    InvalidParameters = 3,
+    TokenNotFound = 4,
+    MetadataAlreadySet = 5,
+    AlreadyInitialized = 6,
+    InsufficientBalance = 7,
+    InvalidAmount = 8,
+    ClawbackDisabled = 9,
+    InvalidBurnAmount = 10,
+    BurnAmountExceedsBalance = 11,
+    ContractPaused = 12,
 }
