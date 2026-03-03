@@ -86,3 +86,33 @@ pub fn emit_token_burned(env: &Env, token_address: &Address, amount: i128) {
         (amount,),
     );
 }
+
+/// Emit token created event
+/// 
+/// Published when a new token is successfully created
+pub fn emit_token_created(
+    env: &Env,
+    token_address: &Address,
+    creator: &Address,
+    name: &soroban_sdk::String,
+    symbol: &soroban_sdk::String,
+) {
+    env.events().publish(
+        (symbol_short!("token_created"), token_address.clone()),
+        (creator, name, symbol),
+    );
+}
+
+/// Emit batch tokens created event
+/// 
+/// Published when multiple tokens are created in a batch operation
+pub fn emit_batch_tokens_created(
+    env: &Env,
+    creator: &Address,
+    count: u32,
+) {
+    env.events().publish(
+        (symbol_short!("batch_created"),),
+        (creator, count),
+    );
+}

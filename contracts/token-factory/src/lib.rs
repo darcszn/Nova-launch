@@ -4,9 +4,10 @@ mod events;
 mod storage;
 mod burn;
 mod types;
+mod token_creation;
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
-use types::{Error, FactoryState, TokenInfo};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use types::{Error, FactoryState, TokenInfo, TokenCreationParams};
 
 #[contract]
 pub struct TokenFactory;
@@ -272,7 +273,7 @@ impl TokenFactory {
         storage::get_token_info_by_address(&env, &token_address).ok_or(Error::TokenNotFound)
     }
 
-    /// Admin burn function with clawback capability
+    /// Admin burn function with clawback capability (by address)
     ///
     /// Allows the token creator (admin) to burn tokens from any address.
     /// This is a privileged operation that requires:
@@ -286,7 +287,7 @@ impl TokenFactory {
     /// - Separate event type distinguishes admin burns from self burns
     /// - Clawback must be explicitly enabled per token
     /// - All burns are permanently recorded in total_burned counter
-    pub fn admin_burn(
+    pub fn admin_burn_by_address(
         env: Env,
         token_address: Address,
         admin: Address,
@@ -391,6 +392,73 @@ impl TokenFactory {
         burn::get_burn_count(&env, token_index)
     }
 
+    /// Create a single token with fee payment
+    /// 
+    /// # Arguments
+    /// * `creator` - Address creating the token (must authorize)
+    /// * `name` - Token name (1-32 characters)
+    /// * `symbol` - Token symbol (1-12 characters)
+    /// * `decimals` - Token decimals (0-18)
+    /// * `initial_supply` - Initial token supply (must be positive)
+    /// * `metadata_uri` - Optional metadata URI
+    /// * `fee_payment` - Fee payment amount
+    /// 
+    /// # Returns
+    /// Address of the created token
+    /// 
+    /// # Errors
+    /// * `ContractPaused` - Contract is paused
+    /// * `InsufficientFee` - Fee payment is insufficient
+    /// * `InvalidTokenParams` - Token parameters are invalid
+    pub fn create_token(
+        env: Env,
+        creator: Address,
+        name: String,
+        symbol: String,
+        decimals: u32,
+        initial_supply: i128,
+        metadata_uri: Option<String>,
+        fee_payment: i128,
+    ) -> Result<Address, Error> {
+        token_creation::create_token(
+            &env,
+            creator,
+            name,
+            symbol,
+            decimals,
+            initial_supply,
+            metadata_uri,
+            fee_payment,
+        )
+    }
+
+    /// Batch create multiple tokens atomically
+    /// 
+    /// All tokens are created in a single transaction with atomic semantics.
+    /// If any token fails validation, the entire batch is rolled back.
+    /// 
+    /// # Arguments
+    /// * `creator` - Address creating the tokens (must authorize)
+    /// * `tokens` - Vector of token creation parameters
+    /// * `total_fee_payment` - Total fee payment for all tokens
+    /// 
+    /// # Returns
+    /// Vector of created token addresses
+    /// 
+    /// # Errors
+    /// * `ContractPaused` - Contract is paused
+    /// * `InsufficientFee` - Total fee payment is insufficient
+    /// * `InvalidTokenParams` - Any token has invalid parameters
+    /// * `BatchCreationFailed` - Batch creation failed (atomic rollback)
+    pub fn batch_create_tokens(
+        env: Env,
+        creator: Address,
+        tokens: Vec<TokenCreationParams>,
+        total_fee_payment: i128,
+    ) -> Result<Vec<Address>, Error> {
+        token_creation::batch_create_tokens(&env, creator, tokens, total_fee_payment)
+    }
+
 }
 
 // Temporarily disabled - requires create_token implementation
@@ -426,3 +494,6 @@ mod fuzz_string_boundaries;
 
 #[cfg(test)]
 mod fuzz_numeric_boundaries;
+
+#[cfg(test)]
+mod batch_token_creation_test;

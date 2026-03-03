@@ -28,6 +28,17 @@ pub struct TokenInfo {
     pub clawback_enabled: bool,
 }
 
+/// Token creation parameters for batch operations
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenCreationParams {
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u32,
+    pub initial_supply: i128,
+    pub metadata_uri: Option<String>,
+}
+
 /// Batch fee update structure for Phase 2 optimization
 /// Allows updating both fees in a single operation (40% gas savings)
 #[contracttype]
@@ -45,29 +56,16 @@ pub enum DataKey {
     BaseFee,
     MetadataFee,
     TokenCount,
-    Token(u32),            // Token index -> TokenInfo  (existing)
-    Balance(u32, Address), // (token_index, holder)     -> i128   (NEW — burn)
-    BurnCount(u32),        // token_index               -> u32    (NEW — burn)
-    Token(u32),
-    TokenByAddress(Address),
+    Token(u32),            // Token index -> TokenInfo
+    TokenByAddress(Address), // Token address -> TokenInfo
+    Balance(u32, Address), // (token_index, holder) -> i128
+    BurnCount(u32),        // token_index -> u32
     Paused,
 }
 
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
-    // ── pre-existing ──────────────────────────────────────
-    InsufficientFee     = 1,
-    Unauthorized        = 2,
-    InvalidParameters   = 3,
-    TokenNotFound       = 4,
-    MetadataAlreadySet  = 5,
-    AlreadyInitialized  = 6,
-
-    // ── burn feature ──────────────────────────────────────
-    InsufficientBalance = 7, // holder balance < requested burn amount
-    ArithmeticError     = 8, // checked_sub / checked_add returned None
-    BatchTooLarge       = 9, // batch_burn entry count > MAX_BATCH_BURN
     InsufficientFee = 1,
     Unauthorized = 2,
     InvalidParameters = 3,
@@ -75,9 +73,13 @@ pub enum Error {
     MetadataAlreadySet = 5,
     AlreadyInitialized = 6,
     InsufficientBalance = 7,
-    InvalidAmount = 8,
-    ClawbackDisabled = 9,
-    InvalidBurnAmount = 10,
-    BurnAmountExceedsBalance = 11,
-    ContractPaused = 12,
+    ArithmeticError = 8,
+    BatchTooLarge = 9,
+    InvalidAmount = 10,
+    ClawbackDisabled = 11,
+    InvalidBurnAmount = 12,
+    BurnAmountExceedsBalance = 13,
+    ContractPaused = 14,
+    InvalidTokenParams = 15,
+    BatchCreationFailed = 16,
 }
