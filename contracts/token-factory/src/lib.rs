@@ -1745,3 +1745,6 @@ mod treasury_integration_test;
 
 #[cfg(test)]
 mod auth_fuzz_test;
+
+#[cfg(test)]
+mod metamorphic_test;
