@@ -524,15 +524,14 @@ impl TokenFactory {
         // Emit optimized event
         events::emit_fees_updated(&env, new_base_fee, new_metadata_fee);
 
-    /// Get token info by index
-   pub fn get_token_info(env: Env, index: u32) -> Result<TokenInfo, Error> {
-    let mut info = storage::get_token_info(&env, index).ok_or(Error::TokenNotFound)?;
-    info.is_paused = storage::is_token_paused(&env, index);   // ADD
-    Ok(info)
-}
-    /// Create a new token (Simulated for registry)
-    pub fn create_token(
         Ok(())
+    }
+
+    /// Get token info by index
+    pub fn get_token_info(env: Env, index: u32) -> Result<TokenInfo, Error> {
+        let mut info = storage::get_token_info(&env, index).ok_or(Error::TokenNotFound)?;
+        info.is_paused = storage::is_token_paused(&env, index);
+        Ok(info)
     }
 
     /// Batch update admin operations (Phase 2 optimization)
