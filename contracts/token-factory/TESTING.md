@@ -9,6 +9,10 @@ Comprehensive documentation for testing the Stellar Token Factory smart contract
 3. [Writing Integration Tests](#writing-integration-tests)
 4. [Property-Based Testing](#property-based-testing)
 5. [Benchmarking](#benchmarking)
+   - [Gas Benchmarks](#gas-benchmarks)
+   - [Baseline Values](#baseline-values)
+   - [Running Benchmarks](#running-benchmarks)
+   - [Regression Detection](#regression-detection)
 6. [Debugging Tests](#debugging-tests)
 7. [Common Issues](#common-issues)
 
@@ -416,7 +420,7 @@ Measure contract execution costs:
 fn bench_initialize() {
     let env = Env::default();
     let contract_id = env.register_contract(None, TokenFactory);
-    let client = TokenFactoryClient::new(&env, &contract_id);
+    let client = TokenFactoryClient::new(&setup.env, &contract_id);
     
     let admin = Address::generate(&env);
     let treasury = Address::generate(&env);
@@ -430,6 +434,87 @@ fn bench_initialize() {
     println!("CPU instructions: {}", env.budget().cpu_instruction_cost());
     println!("Memory bytes: {}", env.budget().memory_bytes_cost());
 }
+```
+
+### Gas Benchmarks
+
+The Token Factory includes comprehensive gas benchmarks for measuring CPU and memory costs of all major operations. These benchmarks are designed to detect performance regressions.
+
+#### Benchmark Files
+
+- `src/gas_bench_test.rs` - Burn operation benchmarks
+- `src/gas_benchmark_comprehensive.rs` - Factory operation benchmarks (initialize, update_fees, etc.)
+- `src/create_mint_bench.rs` - Create and mint operation benchmarks (create_token, mint, batch operations)
+
+#### Available Benchmarks
+
+| Benchmark | Description |
+|-----------|-------------|
+| `bench_single_create_token` | Single token creation |
+| `bench_single_mint` | Single mint operation |
+| `bench_batch_create_5` | Batch of 5 token creations |
+| `bench_batch_mint_5` | Batch of 5 mint operations |
+| `bench_comparison_individual_vs_batch_create` | Compare individual vs batch create |
+| `bench_comparison_individual_vs_batch_mint` | Compare individual vs batch mint |
+| `bench_create_mint_baseline_report` | Full baseline report with all operations |
+
+### Baseline Values
+
+Baseline values are defined in the benchmark files and should be updated when running the baseline report. The following are the current measured baseline values for the Token Factory contract:
+
+```rust
+// From create_mint_bench.rs - Updated after running benchmarks
+const BASELINE_CREATE_TOKEN_CPU: u64 = 162139;
+const BASELINE_CREATE_TOKEN_MEM: u64 = 21456;
+const BASELINE_BATCH_CREATE_5_CPU: u64 = 1589664;
+const BASELINE_BATCH_CREATE_5_MEM: u64 = 260801;
+```
+
+#### Current Baseline Measurements
+
+| Operation | Avg CPU | Avg Memory | Per-Op CPU |
+|-----------|--------|------------|------------|
+| create_token (single) | 162,139 | 21,456 bytes | 162,139 |
+| create_token (batch 5) | 1,589,664 | 260,801 bytes | 317,933 |
+
+#### How to Update Baselines
+
+1. Run the baseline report: `cargo test bench_create_baseline_report -- --nocapture`
+2. Copy the printed baseline values
+3. Update the constants in `create_mint_bench.rs`
+4. Run benchmarks again to verify regression detection works
+
+### Running Benchmarks
+
+```bash
+# Run all create/mint benchmarks
+cargo test create_mint_bench -- --nocapture
+
+# Run baseline report to get current values
+cargo test bench_create_mint_baseline_report -- --nocapture
+
+# Run burn benchmarks
+cargo test bench_single_burn -- --nocapture
+cargo test bench_batch_burn_2 -- --nocapture
+
+# Run comprehensive benchmarks
+cargo test bench_initialize_comprehensive -- --nocapture
+```
+
+### Regression Detection
+
+Benchmarks include automatic regression detection with a configurable threshold (default 10%). When running benchmarks:
+
+1. If baseline is set to 0, no regression check is performed (first run)
+2. If current measurement exceeds baseline by more than 10%, a `[REGRESSION]` warning is printed
+3. The benchmark still passes but the warning indicates potential performance degradation
+
+#### Regression Threshold
+
+The threshold can be adjusted by modifying the `REGRESSION_THRESHOLD` constant:
+
+```rust
+const REGRESSION_THRESHOLD: f64 = 0.10; // 10% increase triggers warning
 ```
 
 ### Gas Estimation

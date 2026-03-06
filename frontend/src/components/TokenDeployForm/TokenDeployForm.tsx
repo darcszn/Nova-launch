@@ -3,7 +3,9 @@ import type { DeploymentResult, TokenDeployParams, WalletState } from '../../typ
 import { useTokenDeploy } from '../../hooks/useTokenDeploy';
 import { formatXLM, truncateAddress } from '../../utils/formatting';
 import { BasicInfoStep, type BasicInfoData } from './BasicInfoStep';
-import { Button } from '../UI/Button';
+import { FeeDisplay } from './FeeDisplay';
+import { Button, ProgressBar, LoadingButton } from '../UI';
+import { analytics } from '../../services/analytics';
 import { Input } from '../UI/Input';
 
 interface TokenDeployFormProps {
@@ -76,6 +78,10 @@ export function TokenDeployForm({
         };
 
         try {
+            try {
+                analytics.track('deploy_button_click', { network: wallet.network });
+            } catch {}
+
             const deployment = await deploy(params);
             setResult(deployment);
         } catch {
@@ -85,6 +91,9 @@ export function TokenDeployForm({
 
     const handleRetry = async () => {
         reset();
+        try {
+            analytics.track('deploy_retry', { network: wallet.network });
+        } catch {}
         await handleDeploy();
     };
 
@@ -96,6 +105,9 @@ export function TokenDeployForm({
         setLocalError(null);
         setResult(null);
         reset();
+        try {
+            analytics.track('deploy_another_reset');
+        } catch {}
     };
 
     if (result && status === 'success') {
@@ -132,20 +144,22 @@ export function TokenDeployForm({
 
     if (step === 'basic') {
         return (
-            <BasicInfoStep
-                onNext={handleBasicNext}
-                initialData={
-                    wallet.address
-                        ? {
-                            name: basicInfo?.name || '',
-                            symbol: basicInfo?.symbol || '',
-                            decimals: basicInfo?.decimals ?? 7,
-                            initialSupply: basicInfo?.initialSupply || '',
-                            adminWallet: basicInfo?.adminWallet || wallet.address,
-                        }
-                        : basicInfo || undefined
-                }
-            />
+            <div data-tutorial="token-form">
+                <BasicInfoStep
+                    onNext={handleBasicNext}
+                    initialData={
+                        wallet.address
+                            ? {
+                                name: basicInfo?.name || '',
+                                symbol: basicInfo?.symbol || '',
+                                decimals: basicInfo?.decimals ?? 7,
+                                initialSupply: basicInfo?.initialSupply || '',
+                                adminWallet: basicInfo?.adminWallet || wallet.address,
+                            }
+                            : basicInfo || undefined
+                    }
+                />
+            </div>
         );
     }
 
@@ -178,7 +192,13 @@ export function TokenDeployForm({
                 <h4 className="font-medium text-gray-900">Optional Metadata</h4>
                 <Input
                     value={metadataDescription}
-                    onChange={(event) => setMetadataDescription(event.target.value)}
+                    onChange={(event) => {
+                        const v = event.target.value;
+                        setMetadataDescription(v);
+                        try {
+                            if (v.trim()) analytics.track('metadata_description_added', { length: v.length });
+                        } catch {}
+                    }}
                     label="Description"
                     placeholder="Describe your token"
                     maxLength={500}
@@ -191,6 +211,9 @@ export function TokenDeployForm({
                         onChange={(event) => {
                             const file = event.target.files?.[0] ?? null;
                             setMetadataImage(file);
+                            try {
+                                if (file) analytics.track('metadata_image_added', { size: file.size, type: file.type });
+                            } catch {}
                         }}
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
@@ -198,53 +221,59 @@ export function TokenDeployForm({
                 </div>
             </div>
 
-            <div className="rounded-lg border border-gray-200 p-4">
-                <h4 className="font-medium text-gray-900">Fee Breakdown</h4>
-                <div className="mt-2 space-y-1 text-sm text-gray-700">
-                    <p>Base Fee: {formatXLM(feeBreakdown.baseFee)} XLM</p>
-                    <p>Metadata Fee: {formatXLM(feeBreakdown.metadataFee)} XLM</p>
-                    <p className="font-semibold text-gray-900">
-                        Total: {formatXLM(feeBreakdown.totalFee)} XLM
-                    </p>
-                </div>
-            </div>
+            <FeeDisplay feeBreakdown={feeBreakdown} hasMetadata={hasMetadataInput} />
 
             {status === 'error' && error ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4" role="alert">
-                    <h4 className="font-medium text-red-800">Deployment Failed</h4>
-                    <p className="mt-2 text-sm text-red-700">
-                        {error.details ? `${error.message}: ${error.details}` : error.message}
-                    </p>
-                    <Button className="mt-3" variant="danger" onClick={() => void handleRetry()}>
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                    <h3 className="font-semibold text-red-800 mb-2">Deployment Failed</h3>
+                    <p className="text-red-700 mb-3">{typeof error === 'string' ? error : error.message || 'An error occurred during deployment'}</p>
+                    <button
+                        onClick={() => void handleRetry()}
+                        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    >
                         Retry Deployment
-                    </Button>
+                    </button>
                 </div>
             ) : null}
 
             {localError ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4" role="alert">
-                    <p className="text-sm text-red-700">{localError}</p>
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+                    {typeof localError === 'string' ? localError : 'An error occurred'}
                 </div>
             ) : null}
 
             {isDeploying ? (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                    <p className="text-sm text-blue-800">{statusMessage}</p>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                    <p className="text-sm font-medium text-blue-800">{statusMessage}</p>
+                    <ProgressBar
+                        progress={status === 'uploading' ? 30 : status === 'deploying' ? 70 : 100}
+                        label={status === 'uploading' ? 'Uploading metadata...' : 'Deploying token...'}
+                        showPercentage={true}
+                        variant="default"
+                        size="md"
+                    />
                 </div>
             ) : null}
 
             <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setStep('basic')} className="w-full">
+                <Button 
+                    variant="outline" 
+                    onClick={() => setStep('basic')} 
+                    className="w-full"
+                    disabled={isDeploying}
+                >
                     Back
                 </Button>
-                <Button
+                <LoadingButton
                     onClick={() => void handleDeploy()}
                     loading={isDeploying}
+                    loadingText={status === 'uploading' ? 'Uploading...' : 'Deploying...'}
                     className="w-full"
                     disabled={!wallet.connected}
+                    data-tutorial="deploy-button"
                 >
                     Deploy Token
-                </Button>
+                </LoadingButton>
             </div>
         </div>
     );
