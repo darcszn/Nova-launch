@@ -1950,3 +1950,6 @@ mod event_replay_test;
 
 #[cfg(test)]
 mod boundary_chaos_test;
+
+#[cfg(test)]
+mod stateful_cross_feature_fuzz;
