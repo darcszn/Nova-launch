@@ -1,6 +1,9 @@
 import axios from "axios";
 import { WebhookEventType } from "../types/webhook";
 import webhookDeliveryService from "./webhookDeliveryService";
+import { PrismaClient } from "@prisma/client";
+import { GovernanceEventParser } from "./governanceEventParser";
+import governanceEventMapper from "./governanceEventMapper";
 
 const HORIZON_URL =
   process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
@@ -23,6 +26,13 @@ interface StellarEvent {
 export class StellarEventListener {
   private isRunning = false;
   private lastCursor: string | null = null;
+  private prisma: PrismaClient;
+  private governanceParser: GovernanceEventParser;
+
+  constructor() {
+    this.prisma = new PrismaClient();
+    this.governanceParser = new GovernanceEventParser(this.prisma);
+  }
 
   /**
    * Start listening for Stellar events
@@ -102,6 +112,16 @@ export class StellarEventListener {
    */
   private async processEvent(event: StellarEvent): Promise<void> {
     try {
+      // Check if this is a governance event
+      if (governanceEventMapper.isGovernanceEvent(event)) {
+        const governanceEvent = governanceEventMapper.mapEvent(event);
+        if (governanceEvent) {
+          await this.governanceParser.parseEvent(governanceEvent);
+          console.log(`Processed governance event: ${governanceEvent.type}`);
+        }
+        return;
+      }
+
       // Parse event topic to determine event type
       const eventType = this.parseEventType(event);
 

@@ -545,6 +545,19 @@ pub fn get_token_info(
 | 8 | `BurnNotEnabled` | Burn functionality not enabled |
 | 9 | `InvalidBurnAmount` | Burn amount is zero or negative |
 
+##### Vault Error Codes
+
+These codes are reserved for vault lifecycle failures and are guaranteed to remain stable for downstream clients.
+
+| Code | Error | Description |
+|------|-------|-------------|
+| 60 | `VaultNotFound` | Referenced vault does not exist |
+| 61 | `VaultLocked` | Unlock time or milestone has not been met |
+| 62 | `VaultAlreadyClaimed` | Vault funds have already been claimed |
+| 63 | `VaultCancelled` | Vault was cancelled and is immutable |
+| 64 | `InvalidVaultConfig` | Vault parameters failed validation |
+| 65 | `NothingToClaim` | No claimable balance remains (vaults/streams) |
+
 #### Events
 
 ##### `TokenBurned`

@@ -244,7 +244,7 @@ fn test_create_multiple_streams() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #26)")]
+#[should_panic(expected = "Error(Contract, #27)")]
 fn test_get_stream_not_found() {
     let (_env, client, _admin, _treasury) = setup();
     

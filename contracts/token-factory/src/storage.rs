@@ -1,6 +1,6 @@
 use soroban_sdk::{Address, Env};
 
-use crate::types::{DataKey, FactoryState, TokenInfo};
+use crate::types::{DataKey, Error, FactoryState, TokenInfo};
 
 // ============================================================
 // Storage Functions - Burn Tracking
@@ -69,18 +69,20 @@ pub fn get_token_info(env: &Env, index: u32) -> Option<TokenInfo> {
 
 pub fn set_token_info(env: &Env, index: u32, info: &TokenInfo) {
     env.storage().instance().set(&DataKey::Token(index), info);
-    
+
     // Index by creator for pagination
     add_creator_token(env, &info.creator, index);
-    
+
     // Emit token registered event
     crate::events::emit_token_registered(env, &info.address, &info.creator);
 }
 
-pub fn increment_token_count(env: &Env) -> u32 {
-    let count = get_token_count(env) + 1;
+pub fn increment_token_count(env: &Env) -> Result<u32, Error> {
+    let count = get_token_count(env)
+        .checked_add(1)
+        .ok_or(Error::ArithmeticError)?;
     env.storage().instance().set(&DataKey::TokenCount, &count);
-    count
+    Ok(count)
 }
 
 // Get factory state
@@ -575,9 +577,10 @@ pub fn get_balance(env: &Env, token_index: u32, holder: &Address) -> i128 {
 }
 
 pub fn set_balance(env: &Env, token_index: u32, holder: &Address, balance: i128) {
-    env.storage()
-        .persistent()
-        .set(&crate::types::DataKey::Balance(token_index, holder.clone()), &balance);
+    env.storage().persistent().set(
+        &crate::types::DataKey::Balance(token_index, holder.clone()),
+        &balance,
+    );
 }
 
 pub fn get_burn_count(env: &Env, token_index: u32) -> u32 {
@@ -587,11 +590,14 @@ pub fn get_burn_count(env: &Env, token_index: u32) -> u32 {
         .unwrap_or(0)
 }
 
-pub fn increment_burn_count(env: &Env, token_index: u32) {
-    let count = get_burn_count(env, token_index) + 1;
+pub fn increment_burn_count(env: &Env, token_index: u32) -> Result<(), Error> {
+    let count = get_burn_count(env, token_index)
+        .checked_add(1)
+        .ok_or(Error::ArithmeticError)?;
     env.storage()
         .persistent()
         .set(&crate::types::DataKey::BurnCount(token_index), &count);
+    Ok(())
 }
 
 // ── Burn feature additions ─────────────────────────────────
@@ -671,11 +677,7 @@ pub fn update_token_supply(env: &Env, token_address: &Address, amount_change: i1
 // Phase 2 Optimization: Batch admin state operations
 // Allows multiple admin parameters to be updated efficiently in a single transaction
 // Reduces gas by combining storage verification and writes
-pub fn batch_update_fees(
-    env: &Env,
-    base_fee: Option<i128>,
-    metadata_fee: Option<i128>,
-) {
+pub fn batch_update_fees(env: &Env, base_fee: Option<i128>, metadata_fee: Option<i128>) {
     if let Some(fee) = base_fee {
         set_base_fee(env, fee);
     }
@@ -693,7 +695,6 @@ pub fn get_admin_state(env: &Env) -> (Address, bool) {
     (admin, paused)
 }
 
-
 // ── Timelock storage functions ─────────────────────────────
 
 pub fn get_timelock_config(env: &Env) -> crate::types::TimelockConfig {
@@ -707,16 +708,22 @@ pub fn get_timelock_config(env: &Env) -> crate::types::TimelockConfig {
 }
 
 pub fn set_timelock_config(env: &Env, config: &crate::types::TimelockConfig) {
-    env.storage().instance().set(&DataKey::TimelockConfig, config);
+    env.storage()
+        .instance()
+        .set(&DataKey::TimelockConfig, config);
 }
 
-pub fn get_next_change_id(env: &Env) -> u64 {
-    let id = env.storage()
+pub fn get_next_change_id(env: &Env) -> Result<u64, Error> {
+    let id = env
+        .storage()
         .instance()
         .get(&DataKey::NextChangeId)
         .unwrap_or(0_u64);
-    env.storage().instance().set(&DataKey::NextChangeId, &(id + 1));
-    id
+    let next_id = id.checked_add(1).ok_or(Error::ArithmeticError)?;
+    env.storage()
+        .instance()
+        .set(&DataKey::NextChangeId, &next_id);
+    Ok(id)
 }
 
 pub fn get_pending_change(env: &Env, change_id: u64) -> Option<crate::types::PendingChange> {
@@ -737,7 +744,6 @@ pub fn remove_pending_change(env: &Env, change_id: u64) {
         .remove(&DataKey::PendingChange(change_id));
 }
 
-
 // ── Creator indexing functions ─────────────────────────────
 
 /// Add a token index to a creator's token list
@@ -747,13 +753,13 @@ pub fn add_creator_token(env: &Env, creator: &Address, token_index: u32) {
         .persistent()
         .get(&DataKey::CreatorTokens(creator.clone()))
         .unwrap_or(soroban_sdk::Vec::new(env));
-    
+
     tokens.push_back(token_index);
-    
+
     env.storage()
         .persistent()
         .set(&DataKey::CreatorTokens(creator.clone()), &tokens);
-    
+
     // Update count
     let count = tokens.len();
     env.storage()
@@ -777,6 +783,87 @@ pub fn get_creator_token_count(env: &Env, creator: &Address) -> u32 {
         .unwrap_or(0)
 }
 
+/// Get beneficiary stream count (alias for creator token count for now)
+pub fn get_beneficiary_stream_count(env: &Env, beneficiary: &Address) -> u32 {
+    get_creator_token_count(env, beneficiary)
+}
+
+/// Get beneficiary stream entry (alias for creator token entry for now)
+pub fn get_beneficiary_stream_entry(env: &Env, beneficiary: &Address, index: u32) -> Option<u32> {
+    let tokens = get_creator_tokens(env, beneficiary);
+    if index < tokens.len() {
+        Some(tokens.get(index).unwrap())
+    } else {
+        None
+    }
+}
+
+// ── Token-stream indexing functions ─────────────────────────────
+
+/// Add a stream ID to a token's stream list
+///
+/// Appends the stream_id to the token's stream vector and updates
+/// the TokenStreamCount atomically. If the token has no existing
+/// streams, initializes an empty vector first.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `token_index` - Index of the token
+/// * `stream_id` - ID of the stream to add
+pub fn add_token_stream(env: &Env, token_index: u32, stream_id: u32) {
+    let key = DataKey::TokenStreams(token_index);
+    let mut streams: soroban_sdk::Vec<u32> = env
+        .storage()
+        .instance()
+        .get(&key)
+        .unwrap_or(soroban_sdk::Vec::new(env));
+
+    streams.push_back(stream_id);
+
+    env.storage().instance().set(&key, &streams);
+
+    // Update count atomically
+    let count = streams.len();
+    env.storage()
+        .instance()
+        .set(&DataKey::TokenStreamCount(token_index), &count);
+}
+
+/// Get all stream IDs for a token
+///
+/// Retrieves the vector of stream IDs associated with the specified token.
+/// Returns an empty vector if the token has no streams.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `token_index` - Index of the token
+///
+/// # Returns
+/// Vector of stream IDs for this token (empty if none exist)
+pub fn get_token_streams(env: &Env, token_index: u32) -> soroban_sdk::Vec<u32> {
+    env.storage()
+        .instance()
+        .get(&DataKey::TokenStreams(token_index))
+        .unwrap_or(soroban_sdk::Vec::new(env))
+}
+
+/// Get the count of streams for a token
+///
+/// Retrieves the stream count without loading the full stream data.
+/// Returns 0 if the token has no streams.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `token_index` - Index of the token
+///
+/// # Returns
+/// Number of streams for this token
+pub fn get_token_stream_count(env: &Env, token_index: u32) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TokenStreamCount(token_index))
+        .unwrap_or(0)
+}
 
 // ── Treasury storage functions ─────────────────────────────
 
@@ -843,45 +930,201 @@ pub fn get_stream_count(env: &Env) -> u32 {
 }
 
 /// Increment stream count and return new ID
-pub fn increment_stream_count(env: &Env) -> u32 {
-    let count = get_stream_count(env) + 1;
+pub fn increment_stream_count(env: &Env) -> Result<u32, Error> {
+    let count = get_stream_count(env)
+        .checked_add(1)
+        .ok_or(Error::ArithmeticError)?;
     env.storage().instance().set(&DataKey::StreamCount, &count);
-    count
+    Ok(count)
 }
 
 /// Get stream info by ID
-pub fn get_stream(env: &Env, stream_id: u32) -> Option<crate::stream_types::StreamInfo> {
+pub fn get_stream(env: &Env, stream_id: u64) -> Option<crate::types::StreamInfo> {
     env.storage()
-        .persistent()
-        .get(&DataKey::Stream(stream_id))
+        .temporary()
+        .get(&DataKey::Stream(stream_id.try_into().unwrap()))
 }
 
 /// Store stream info
-pub fn set_stream(env: &Env, stream_id: u32, stream: &crate::stream_types::StreamInfo) {
+pub fn set_stream(env: &Env, stream_id: u64, stream: &crate::types::StreamInfo) {
     env.storage()
-        .persistent()
-        .set(&DataKey::Stream(stream_id), stream);
+        .temporary()
+        .set(&DataKey::Stream(stream_id.try_into().unwrap()), stream);
 }
 
-/// Add stream to creator's index for pagination
-pub fn add_creator_stream(env: &Env, creator: &Address, stream_id: u32) {
-    let mut streams: soroban_sdk::Vec<u32> = env
+/// Get next stream ID
+pub fn get_next_stream_id(env: &Env) -> u64 {
+    let id = env
         .storage()
-        .persistent()
-        .get(&DataKey::StreamByCreator(creator.clone(), 0))
-        .unwrap_or(soroban_sdk::Vec::new(env));
-    
-    streams.push_back(stream_id);
-    
+        .instance()
+        .get(&DataKey::NextStreamId)
+        .unwrap_or(0_u64);
     env.storage()
-        .persistent()
-        .set(&DataKey::StreamByCreator(creator.clone(), 0), &streams);
+        .instance()
+        .set(&DataKey::NextStreamId, &(id + 1));
+    id
 }
 
-/// Get all stream IDs for a creator
-pub fn get_creator_streams(env: &Env, creator: &Address) -> soroban_sdk::Vec<u32> {
+// ── Vault storage functions ───────────────────────────────
+
+/// Get the total number of vaults created.
+pub fn get_vault_count(env: &Env) -> u64 {
+    env.storage().instance().get(&DataKey::VaultCount).unwrap_or(0_u64)
+}
+
+/// Increment vault count and return the new vault id.
+pub fn increment_vault_count(env: &Env) -> Result<u64, Error> {
+    let id = get_vault_count(env)
+        .checked_add(1)
+        .ok_or(Error::ArithmeticError)?;
+    env.storage().instance().set(&DataKey::VaultCount, &id);
+    Ok(id)
+}
+
+/// Get a vault by id.
+pub fn get_vault(env: &Env, vault_id: u64) -> Option<crate::types::Vault> {
+    env.storage().persistent().get(&DataKey::Vault(vault_id))
+}
+
+/// Persist a vault and maintain owner/creator index mappings.
+pub fn set_vault(env: &Env, vault: &crate::types::Vault) -> Result<(), Error> {
     env.storage()
         .persistent()
-        .get(&DataKey::StreamByCreator(creator.clone(), 0))
-        .unwrap_or(soroban_sdk::Vec::new(env))
+        .set(&DataKey::Vault(vault.id), vault);
+
+    let owner_slot = get_owner_vault_count(env, &vault.owner);
+    env.storage().persistent().set(
+        &DataKey::VaultByOwner(vault.owner.clone(), owner_slot),
+        &vault.id,
+    );
+    let next_owner_slot = owner_slot.checked_add(1).ok_or(Error::ArithmeticError)?;
+    env.storage()
+        .persistent()
+        .set(&DataKey::OwnerVaultCount(vault.owner.clone()), &next_owner_slot);
+
+    let creator_slot = get_creator_vault_count(env, &vault.creator);
+    env.storage().persistent().set(
+        &DataKey::VaultByCreator(vault.creator.clone(), creator_slot),
+        &vault.id,
+    );
+    let next_creator_slot = creator_slot.checked_add(1).ok_or(Error::ArithmeticError)?;
+    env.storage().persistent().set(
+        &DataKey::CreatorVaultCount(vault.creator.clone()),
+        &next_creator_slot,
+    );
+    Ok(())
+}
+
+pub fn get_owner_vault_count(env: &Env, owner: &Address) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::OwnerVaultCount(owner.clone()))
+        .unwrap_or(0)
+}
+
+pub fn get_creator_vault_count(env: &Env, creator: &Address) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::CreatorVaultCount(creator.clone()))
+        .unwrap_or(0)
+}
+
+// ── Governance proposal storage ─────────────────────────────────────────
+
+/// Get proposal count
+pub fn get_proposal_count(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::ProposalCount)
+        .unwrap_or(0)
+}
+
+/// Increment proposal count and return new count
+pub fn increment_proposal_count(env: &Env) -> u32 {
+    let count = get_proposal_count(env);
+    let new_count = count.checked_add(1).expect("Proposal count overflow");
+    env.storage()
+        .instance()
+        .set(&DataKey::ProposalCount, &new_count);
+    new_count
+}
+
+/// Get next proposal ID
+pub fn get_next_proposal_id(env: &Env) -> u64 {
+    let id = env
+        .storage()
+        .instance()
+        .get(&DataKey::NextProposalId)
+        .unwrap_or(0_u64);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextProposalId, &(id + 1));
+    id
+}
+
+/// Get proposal by ID
+pub fn get_proposal(env: &Env, proposal_id: u64) -> Option<crate::types::Proposal> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Proposal(proposal_id))
+}
+
+/// Set proposal
+pub fn set_proposal(env: &Env, proposal_id: u64, proposal: &crate::types::Proposal) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Proposal(proposal_id), proposal);
+}
+
+/// Check if an address has voted on a proposal
+pub fn has_voted(env: &Env, proposal_id: u64, voter: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::ProposalVote(proposal_id, voter.clone()))
+}
+
+/// Record a vote for a proposal
+pub fn set_vote(env: &Env, proposal_id: u64, voter: &Address, vote: crate::types::VoteChoice) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::ProposalVote(proposal_id, voter.clone()), &vote);
+}
+
+/// Get a vote for a proposal (if exists)
+pub fn get_vote(env: &Env, proposal_id: u64, voter: &Address) -> Option<crate::types::VoteChoice> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ProposalVote(proposal_id, voter.clone()))
+}
+
+// ============================================================
+// Storage Functions - Address Freezing
+// ============================================================
+
+pub fn is_address_frozen(_env: &Env, _token_address: &Address, _address: &Address) -> bool {
+    false
+}
+
+pub fn set_address_frozen(_env: &Env, _token_address: &Address, _address: &Address, _frozen: bool) {
+    // Stub implementation
+}
+
+// ── Governance storage functions ───────────────────────────
+
+/// Get governance configuration
+pub fn get_governance_config(env: &Env) -> crate::types::GovernanceConfig {
+    env.storage()
+        .instance()
+        .get(&DataKey::GovernanceConfig)
+        .unwrap_or(crate::types::GovernanceConfig {
+            quorum_percent: 30,
+            approval_percent: 51,
+        })
+}
+
+/// Set governance configuration
+pub fn set_governance_config(env: &Env, config: &crate::types::GovernanceConfig) {
+    env.storage()
+        .instance()
+        .set(&DataKey::GovernanceConfig, config);
 }

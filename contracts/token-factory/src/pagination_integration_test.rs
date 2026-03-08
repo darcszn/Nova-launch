@@ -1,5 +1,9 @@
 #![cfg(test)]
 
+extern crate std;
+use std::format;
+use std::vec;
+
 use crate::{TokenFactory, TokenFactoryClient};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 

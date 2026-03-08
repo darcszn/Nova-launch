@@ -1,46 +1,8 @@
-use soroban_sdk::{contracttype, Address, String};
-use crate::types::Error;
+use crate::types::{Error, PaginationCursor, StreamInfo};
+use soroban_sdk::{contracttype, Address, String, Vec};
 
-/// Stream schedule defining vesting timeline
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct StreamSchedule {
-    pub start_time: u64,
-    pub cliff_time: u64,
-    pub end_time: u64,
-}
-
-/// Stream information with schedule and metadata
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct StreamInfo {
-    pub id: u32,
-    pub creator: Address,
-    pub recipient: Address,
-    pub token_address: Address,
-    pub amount: i128,
-    pub schedule: StreamSchedule,
-    pub claimed: i128,
-    pub cancelled: bool,
-    pub metadata: Option<String>,
-    pub created_at: u64,
-}
-
-/// Validate stream schedule ordering
-pub fn validate_schedule(schedule: &StreamSchedule) -> Result<(), Error> {
-    if schedule.start_time > schedule.cliff_time || schedule.cliff_time > schedule.end_time {
-        return Err(Error::InvalidSchedule);
-    }
-    Ok(())
-}
-
-/// Validate stream amount is positive
-pub fn validate_amount(amount: i128) -> Result<(), Error> {
-    if amount <= 0 {
-        return Err(Error::InvalidAmount);
-    }
-    Ok(())
-}
+// Stream types are defined in types.rs
+// pub struct StreamInfo { ... }
 
 /// Metadata update request - only metadata can be changed
 #[contracttype]
@@ -50,8 +12,23 @@ pub struct MetadataUpdate {
     pub new_metadata: Option<String>,
 }
 
+/// Paginated stream result
+///
+/// Contains a page of streams and a cursor for fetching the next page.
+///
+/// # Fields
+/// * `streams` - Vector of stream info for this page
+/// * `cursor` - Cursor for next page (None = no more results)
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedStreams {
+    pub streams: soroban_sdk::Vec<StreamInfo>,
+    pub has_more: bool,
+    pub cursor: PaginationCursor,
+}
+
 /// Validate stream metadata length (max 512 chars)
-/// 
+///
 /// # Validation Rules
 /// - None value: Always valid (metadata is optional)
 /// - Empty string: Invalid (returns Error::InvalidParameters)
@@ -68,15 +45,15 @@ pub fn validate_metadata(metadata: &Option<String>) -> Result<(), Error> {
 }
 
 /// Validate that financial terms remain immutable
-/// 
+///
 /// This function ensures that critical financial parameters cannot be modified
 /// after stream creation. It's used to enforce the invariant that amount and
 /// schedule are locked once a stream is created.
-/// 
+///
 /// # Parameters
 /// - `original`: The original stream info at creation time
 /// - `updated`: The proposed updated stream info
-/// 
+///
 /// # Returns
 /// - Ok(()) if financial terms are unchanged
 /// - Err(Error::InvalidParameters) if any financial term differs
@@ -85,57 +62,95 @@ pub fn validate_financial_invariants(
     updated: &StreamInfo,
 ) -> Result<(), Error> {
     // Verify immutable financial terms
-    if original.amount != updated.amount {
+    if original.total_amount != updated.total_amount {
         return Err(Error::InvalidParameters);
     }
-    
+
     if original.creator != updated.creator {
         return Err(Error::InvalidParameters);
     }
-    
+
     if original.recipient != updated.recipient {
         return Err(Error::InvalidParameters);
     }
-    
-    if original.created_at != updated.created_at {
-        return Err(Error::InvalidParameters);
-    }
-    
+
     if original.id != updated.id {
         return Err(Error::InvalidParameters);
     }
-    
+
+    if original.token_index != updated.token_index {
+        return Err(Error::InvalidParameters);
+    }
+
+    if original.start_time != updated.start_time {
+        return Err(Error::InvalidParameters);
+    }
+
+    if original.end_time != updated.end_time {
+        return Err(Error::InvalidParameters);
+    }
+
+    if original.claimed_amount != updated.claimed_amount {
+        return Err(Error::InvalidParameters);
+    }
+
     Ok(())
 }
 
-/// Calculate vested amount based on current time
+/// Calculate claimable amount for a stream at current time
+///
+/// This is a pure calculation function that computes how much can be claimed
+/// based on the stream's vesting schedule. It uses linear vesting between
+/// start_time and end_time.
+///
+/// # Parameters
+/// - `stream`: The stream information
+/// - `current_time`: The current ledger timestamp
 ///
 /// # Returns
-/// Amount vested up to current_time
-pub fn calculate_vested_amount(stream: &StreamInfo, current_time: u64) -> i128 {
-    // Before cliff: nothing vested
-    if current_time < stream.schedule.cliff_time {
+/// The amount that can be claimed (vested amount - already claimed amount)
+///
+/// # Vesting Logic
+/// - Before start_time: 0 claimable
+/// - At start_time: 0 claimable (vesting starts after start_time)
+/// - Between start and end: Linear vesting proportional to elapsed time
+/// - At or after end_time: Full amount claimable
+///
+/// # Formula
+/// ```
+/// vested = (amount * elapsed_time) / total_duration
+/// claimable = vested - claimed_amount
+/// ```
+pub fn calculate_claimable_amount(stream: &StreamInfo, current_time: u64) -> i128 {
+    // Before or at start time: nothing vested yet
+    if current_time <= stream.start_time {
         return 0;
     }
-    
-    // After end: fully vested
-    if current_time >= stream.schedule.end_time {
-        return stream.amount;
+
+    // After end time: everything is vested
+    if current_time >= stream.end_time {
+        let vested = stream.total_amount;
+        let claimable = vested.saturating_sub(stream.claimed_amount);
+        return claimable.max(0);
     }
-    
-    // Between cliff and end: linear vesting
-    let elapsed = current_time - stream.schedule.start_time;
-    let duration = stream.schedule.end_time - stream.schedule.start_time;
-    
+
+    // During vesting period: linear vesting
+    let elapsed = current_time.saturating_sub(stream.start_time);
+    let duration = stream.end_time.saturating_sub(stream.start_time);
+
+    // Avoid division by zero
     if duration == 0 {
-        return stream.amount;
+        return 0;
     }
-    
-    // Calculate proportional vested amount
-    let vested = (stream.amount as i128)
-        .checked_mul(elapsed as i128)
-        .and_then(|v| v.checked_div(duration as i128))
-        .unwrap_or(0);
-    
-    vested.min(stream.amount)
+
+    // Calculate vested amount: (total_amount * elapsed) / duration
+    // Use checked arithmetic to prevent overflow
+    let vested = stream
+        .total_amount
+        .saturating_mul(elapsed as i128)
+        .saturating_div(duration as i128);
+
+    // Claimable = vested - already claimed
+    let claimable = vested.saturating_sub(stream.claimed_amount);
+    claimable.max(0)
 }

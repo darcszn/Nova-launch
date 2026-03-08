@@ -30,7 +30,7 @@
     "lighthouse": "lhci autorun"
   },
   "dependencies": {
-    "@sentry/browser": "^10.39.0",
+    "@sentry/browser": "^10.40.0",
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^13.3.0",
     "i18next": "^25.8.12",

@@ -2,18 +2,18 @@
 
 use crate::types::Error;
 
-/// Test that StreamNotFound error returns correct error code (26)
+/// Test that StreamNotFound error returns correct error code (27)
 #[test]
 fn test_stream_not_found_error_code() {
     let error = Error::StreamNotFound;
-    assert_eq!(error as u32, 26);
+    assert_eq!(error as u32, 27);
 }
 
-/// Test that InvalidSchedule error returns correct error code (27)
+/// Test that InvalidSchedule error returns correct error code (30)
 #[test]
 fn test_invalid_schedule_error_code() {
     let error = Error::InvalidSchedule;
-    assert_eq!(error as u32, 27);
+    assert_eq!(error as u32, 30);
 }
 
 /// Test that CliffNotReached error returns correct error code (28)
@@ -23,36 +23,36 @@ fn test_cliff_not_reached_error_code() {
     assert_eq!(error as u32, 28);
 }
 
-/// Test that NothingToClaim error returns correct error code (29)
+/// Test that NothingToClaim error returns correct error code (65)
 #[test]
 fn test_nothing_to_claim_error_code() {
     let error = Error::NothingToClaim;
-    assert_eq!(error as u32, 29);
+    assert_eq!(error as u32, 65);
 }
 
-/// Test that StreamPaused error returns correct error code (30)
+/// Test that StreamPaused error returns correct error code (31)
 #[test]
 fn test_stream_paused_error_code() {
     let error = Error::StreamPaused;
-    assert_eq!(error as u32, 30);
-}
-
-/// Test that StreamCancelled error returns correct error code (31)
-#[test]
-fn test_stream_cancelled_error_code() {
-    let error = Error::StreamCancelled;
     assert_eq!(error as u32, 31);
 }
 
-/// Test all stream errors are unique and sequential
+/// Test that StreamCancelled error returns correct error code (29)
+#[test]
+fn test_stream_cancelled_error_code() {
+    let error = Error::StreamCancelled;
+    assert_eq!(error as u32, 29);
+}
+
+/// Test stream error codes remain stable
 #[test]
 fn test_stream_errors_sequential() {
-    assert_eq!(Error::StreamNotFound as u32, 26);
-    assert_eq!(Error::InvalidSchedule as u32, 27);
+    assert_eq!(Error::StreamNotFound as u32, 27);
+    assert_eq!(Error::InvalidSchedule as u32, 30);
     assert_eq!(Error::CliffNotReached as u32, 28);
-    assert_eq!(Error::NothingToClaim as u32, 29);
-    assert_eq!(Error::StreamPaused as u32, 30);
-    assert_eq!(Error::StreamCancelled as u32, 31);
+    assert_eq!(Error::NothingToClaim as u32, 65);
+    assert_eq!(Error::StreamPaused as u32, 31);
+    assert_eq!(Error::StreamCancelled as u32, 29);
 }
 
 /// Test error equality and cloning
