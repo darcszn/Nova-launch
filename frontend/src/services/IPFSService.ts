@@ -95,6 +95,66 @@ export class IPFSService {
         const data = await response.json();
         return data.IpfsHash;
     }
+
+    async uploadImage(file: File): Promise<string> {
+        return this.uploadFile(file);
+    }
 }
 
 export const ipfsService = new IPFSService();
+
+export interface IPFSUploadResult {
+    success: boolean;
+    ipfsHash: string;
+    ipfsUrl: string;
+    error?: string;
+}
+
+export interface IPFSUploadHandle {
+    promise: Promise<IPFSUploadResult>;
+    cancel: () => void;
+}
+
+interface UploadProgress {
+    percent: number;
+    estimatedRemainingMs?: number;
+}
+
+export function uploadToIPFSWithProgress(
+    file: File,
+    _validationResult: unknown,
+    metadata: { name: string; keyvalues: Record<string, string> },
+    onProgress?: (progress: UploadProgress) => void,
+): IPFSUploadHandle {
+    let cancelled = false;
+
+    const promise = (async (): Promise<IPFSUploadResult> => {
+        try {
+            onProgress?.({ percent: 10 });
+
+            if (cancelled) throw new Error('Upload cancelled');
+
+            const hash = await ipfsService.uploadImage(file);
+
+            onProgress?.({ percent: 100 });
+
+            return {
+                success: true,
+                ipfsHash: hash,
+                ipfsUrl: `https://gateway.pinata.cloud/ipfs/${hash}`,
+            };
+        } catch (error) {
+            return {
+                success: false,
+                ipfsHash: '',
+                ipfsUrl: '',
+                error: error instanceof Error ? error.message : 'Upload failed',
+            };
+        }
+    })();
+
+    return {
+        promise,
+        cancel: () => { cancelled = true; },
+    };
+}

@@ -1,3 +1,9 @@
+# Performance testing artifacts
+.lighthouseci/
+bundle-analysis.json
+performance-history.json
+dist/stats.html
+
 # Logs
 logs
 *.log
@@ -11,7 +17,6 @@ node_modules
 dist
 dist-ssr
 *.local
-coverage
 
 # Editor directories and files
 .vscode/*
@@ -23,3 +28,7 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# Test coverage
+coverage/
+test-results/

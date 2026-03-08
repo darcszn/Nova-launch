@@ -1,6 +1,6 @@
 use super::*;
 use proptest::prelude::*;
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
 
 fn setup_test_env() -> (Env, TokenFactoryClient<'static>, Address, Address) {
     let env = Env::default();
@@ -25,7 +25,7 @@ proptest! {
     fn test_insufficient_base_fee_rejected(
         fee_shortfall in 1i128..70_000_000i128,
     ) {
-        let (_env, client, _admin, _treasury) = setup_test_env();
+        let (env, client, _admin, _treasury) = setup_test_env();
 
         let state_before = client.get_state();
         let insufficient_fee = 70_000_000 - fee_shortfall;

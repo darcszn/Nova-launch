@@ -105,7 +105,9 @@ export function parseStellarError(error: unknown): StellarError {
     }
 
     // Network error
-    if (error instanceof Error && (error.message.includes('network') || error.message.includes('fetch'))) {
+    const lowerMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    
+    if (lowerMessage.includes('network') || lowerMessage.includes('fetch')) {
         return new StellarError({
             code: ErrorCode.NETWORK_ERROR,
             message: 'Network error',
