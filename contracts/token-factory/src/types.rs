@@ -268,6 +268,13 @@ pub enum Error {
     NothingToClaim = 31,
     CliffNotReached = 32,
     InvalidSchedule = 33,  // Invalid time schedule (cliff outside valid bounds)
+    StreamPaused = 34,
+    InvalidTimeWindow = 35,
+    PayloadTooLarge = 36,
+    ProposalNotFound = 37,
+    VotingNotStarted = 38,
+    VotingEnded = 39,
+    AlreadyVoted = 40,
 }
 
 /// Type of pending change

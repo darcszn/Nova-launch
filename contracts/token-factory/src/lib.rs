@@ -929,6 +929,8 @@ impl TokenFactory {
             burn_count:     storage::get_burn_count(&env, token_index),
             is_paused:      storage::is_token_paused(&env, token_index),
             has_clawback:   false,
+            clawback_enabled: false,
+            freeze_enabled: false,
         })
     }
     // ═══════════════════════════════════════════════════════════════════════
@@ -1821,3 +1823,6 @@ mod timelock_voting_test;
 
 #[cfg(test)]
 mod governance_e2e_test;
+
+#[cfg(test)]
+mod governance_property_test;
