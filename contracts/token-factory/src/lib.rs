@@ -9,6 +9,8 @@ mod buyback;
 mod buyback_test;
 #[cfg(test)]
 mod buyback_error_stability_test;
+#[cfg(test)]
+mod campaign_query_test;
 mod differential_engine;
 mod event_versions;
 mod events;
@@ -49,8 +51,8 @@ mod stream_claim_differential_test;
 
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
 use types::{
-    ContractMetadata, Error, FactoryState, PaginationCursor, StreamInfo, StreamPage, StreamParams,
-    TokenCreationParams, TokenInfo, TokenStats, Vault, VaultStatus,
+    BuybackCampaign, ContractMetadata, Error, FactoryState, PaginationCursor, StreamInfo,
+    StreamPage, StreamParams, TokenCreationParams, TokenInfo, TokenStats, Vault, VaultStatus,
 };
 use crate::milestone_verification::MilestoneVerifier;
 
@@ -1977,6 +1979,30 @@ impl TokenFactory {
             min_tokens_out,
             &dex_address,
         )
+    }
+
+    // ── Campaign Query APIs ──────────────────────────────────
+
+    /// Get campaign by ID
+    pub fn get_campaign(env: Env, campaign_id: u32) -> Result<BuybackCampaign, Error> {
+        storage::get_buyback_campaign(&env, campaign_id)
+    }
+
+    /// Get total campaign count
+    pub fn get_campaign_count(env: Env) -> u32 {
+        storage::get_buyback_campaign_count(&env)
+    }
+
+    /// Get campaigns page with deterministic ordering
+    /// Max page size: 50
+    pub fn get_campaigns_page(env: Env, cursor: u32, limit: u32) -> Vec<BuybackCampaign> {
+        storage::get_campaigns_page(&env, cursor, limit)
+    }
+
+    /// Get campaigns by status (active/inactive)
+    /// Max page size: 50
+    pub fn get_campaigns_by_status(env: Env, active: bool, cursor: u32, limit: u32) -> Vec<BuybackCampaign> {
+        storage::get_campaigns_by_status(&env, active, cursor, limit)
     }
 }
 

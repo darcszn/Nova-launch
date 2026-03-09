@@ -1318,3 +1318,43 @@ pub fn increment_buyback_campaign_count(env: &Env) -> u32 {
     count
 }
 
+/// Get campaigns page with deterministic ordering (by campaign ID)
+pub fn get_campaigns_page(env: &Env, cursor: u32, limit: u32) -> soroban_sdk::Vec<BuybackCampaign> {
+    let max_limit = 50u32;
+    let page_limit = if limit > max_limit { max_limit } else { limit };
+    let total = get_buyback_campaign_count(env);
+    
+    let mut campaigns = soroban_sdk::Vec::new(env);
+    let mut current = cursor;
+    
+    while current < total && campaigns.len() < page_limit {
+        if let Ok(campaign) = get_buyback_campaign(env, current) {
+            campaigns.push_back(campaign);
+        }
+        current += 1;
+    }
+    
+    campaigns
+}
+
+/// Get campaigns by status (active/inactive)
+pub fn get_campaigns_by_status(env: &Env, active: bool, cursor: u32, limit: u32) -> soroban_sdk::Vec<BuybackCampaign> {
+    let max_limit = 50u32;
+    let page_limit = if limit > max_limit { max_limit } else { limit };
+    let total = get_buyback_campaign_count(env);
+    
+    let mut campaigns = soroban_sdk::Vec::new(env);
+    let mut current = cursor;
+    
+    while current < total && campaigns.len() < page_limit {
+        if let Ok(campaign) = get_buyback_campaign(env, current) {
+            if campaign.active == active {
+                campaigns.push_back(campaign);
+            }
+        }
+        current += 1;
+    }
+    
+    campaigns
+}
+
