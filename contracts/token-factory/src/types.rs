@@ -146,6 +146,50 @@ pub struct GovernanceConfig {
     pub voting_period: u64,
 }
 
+/// Buyback campaign structure
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BuybackCampaign {
+    pub id: u64,
+    pub creator: Address,
+    pub token_address: Address,
+    pub total_amount: i128,
+    pub executed_amount: i128,
+    pub current_step: u32,
+    pub total_steps: u32,
+    pub status: CampaignStatus,
+    pub created_at: u64,
+}
+
+/// Campaign status enum
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CampaignStatus {
+    Active = 0,
+    Completed = 1,
+    Cancelled = 2,
+}
+
+/// Individual buyback step
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BuybackStep {
+    pub step_number: u32,
+    pub amount: i128,
+    pub status: StepStatus,
+    pub executed_at: Option<u64>,
+    pub tx_hash: Option<String>,
+}
+
+/// Step execution status
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StepStatus {
+    Pending = 0,
+    Completed = 1,
+    Failed = 2,
+}
+
 /// Current lifecycle state for a vault allocation.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -252,6 +296,11 @@ pub enum DataKey {
     VaultByCreator(Address, u32),
     CreatorVaultCount(Address),
     PendingAdmin,
+    // Buyback campaign keys
+    BuybackCampaign(u64),
+    CampaignStep(u64, u32),
+    NextCampaignId,
+    CampaignCount,
 }
 
 #[contracterror]
@@ -308,6 +357,13 @@ pub enum Error {
     ProposalCancelled = 49,
     QuorumNotMet = 50,
 }
+
+// Buyback campaign errors (reusing existing error codes for compatibility)
+// CampaignNotFound -> use TokenNotFound (4)
+// CampaignNotActive -> use ContractPaused (14)  
+// AllStepsCompleted -> use InvalidParameters (3)
+// StepNotFound -> use TokenNotFound (4)
+// StepAlreadyExecuted -> use ChangeAlreadyExecuted (30)
 
 /// Type of pending change
 ///

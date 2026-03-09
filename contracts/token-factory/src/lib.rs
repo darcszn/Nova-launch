@@ -1,5 +1,6 @@
 #![no_std]
 
+mod buyback;
 mod freeze_functions;
 mod governance;
 
@@ -1897,6 +1898,47 @@ impl TokenFactory {
         approval_percent: u32,
     ) -> bool {
         governance::is_approval_met(yes_votes, total_votes, approval_percent)
+    }
+
+    // ── Buyback Campaign Functions ────────────────────────────────────────────
+
+    /// Create a new buyback campaign
+    pub fn create_buyback_campaign(
+        env: Env,
+        creator: Address,
+        token_address: Address,
+        total_amount: i128,
+        steps: Vec<i128>,
+    ) -> Result<u64, Error> {
+        buyback::create_buyback_campaign(env, creator, token_address, total_amount, steps)
+    }
+
+    /// Execute the current step of a buyback campaign
+    pub fn execute_buyback_step(
+        env: Env,
+        executor: Address,
+        campaign_id: u64,
+    ) -> Result<(), Error> {
+        buyback::execute_buyback_step(env, executor, campaign_id)
+    }
+
+    /// Get campaign details
+    pub fn get_campaign(env: Env, campaign_id: u64) -> Result<types::BuybackCampaign, Error> {
+        buyback::get_campaign(env, campaign_id)
+    }
+
+    /// Get specific step details
+    pub fn get_campaign_step(
+        env: Env,
+        campaign_id: u64,
+        step_number: u32,
+    ) -> Result<types::BuybackStep, Error> {
+        buyback::get_campaign_step(env, campaign_id, step_number)
+    }
+
+    /// Cancel an active campaign
+    pub fn cancel_campaign(env: Env, creator: Address, campaign_id: u64) -> Result<(), Error> {
+        buyback::cancel_campaign(env, creator, campaign_id)
     }
 }
 

@@ -714,3 +714,46 @@ pub fn emit_vault_cancelled(env: &Env, vault_id: u64, actor: &Address, remaining
         (actor.clone(), remaining_amount),
     );
 }
+
+/// Emit campaign created event
+///
+/// Published when a new buyback campaign is created
+pub fn emit_campaign_created(
+    env: &Env,
+    campaign_id: u64,
+    creator: &Address,
+    token_address: &Address,
+    total_amount: i128,
+) {
+    env.events().publish(
+        (symbol_short!("cmp_crt"), campaign_id),
+        (creator.clone(), token_address.clone(), total_amount),
+    );
+}
+
+/// Emit step executed event
+///
+/// Published when a buyback step is executed
+pub fn emit_step_executed(
+    env: &Env,
+    campaign_id: u64,
+    step_number: u32,
+    amount: i128,
+    executor: &Address,
+) {
+    env.events().publish(
+        (symbol_short!("stp_exc"), campaign_id, step_number),
+        (amount, executor.clone()),
+    );
+}
+
+/// Emit campaign cancelled event
+///
+/// Published when a campaign is cancelled
+pub fn emit_campaign_cancelled(env: &Env, campaign_id: u64, creator: &Address) {
+    env.events().publish(
+        (symbol_short!("cmp_cnl"), campaign_id),
+        creator.clone(),
+    );
+}
+

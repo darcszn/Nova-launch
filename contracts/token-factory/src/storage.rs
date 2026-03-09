@@ -1283,3 +1283,56 @@ pub fn get_valid_proof(env: &Env, milestone_hash: &soroban_sdk::BytesN<32>) -> O
         .temporary()
         .get(&key)
 }
+
+// ── Buyback Campaign Storage Functions ────────────────────────────────────────────────────────────────────
+
+pub fn get_next_campaign_id(env: &Env) -> u64 {
+    let id: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::NextCampaignId)
+        .unwrap_or(0);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextCampaignId, &(id + 1));
+    id
+}
+
+pub fn get_buyback_campaign(env: &Env, campaign_id: u64) -> Option<crate::types::BuybackCampaign> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::BuybackCampaign(campaign_id))
+}
+
+pub fn set_buyback_campaign(env: &Env, campaign_id: u64, campaign: &crate::types::BuybackCampaign) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::BuybackCampaign(campaign_id), campaign);
+}
+
+pub fn get_campaign_step(env: &Env, campaign_id: u64, step_number: u32) -> Option<crate::types::BuybackStep> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::CampaignStep(campaign_id, step_number))
+}
+
+pub fn set_campaign_step(env: &Env, campaign_id: u64, step_number: u32, step: &crate::types::BuybackStep) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::CampaignStep(campaign_id, step_number), step);
+}
+
+pub fn get_campaign_count(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::CampaignCount)
+        .unwrap_or(0)
+}
+
+pub fn increment_campaign_count(env: &Env) {
+    let count = get_campaign_count(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::CampaignCount, &(count + 1));
+}
+
