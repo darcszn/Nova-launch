@@ -7,14 +7,14 @@ import { Spinner } from '../../components/UI/Spinner';
 type CampaignStatus = 'scheduled' | 'active' | 'paused' | 'completed' | 'cancelled';
 type TimelineCategory = 'execution' | 'lifecycle';
 
-interface CampaignMetrics {
+export interface CampaignMetrics {
   spent: number;
   bought: number;
   burned: number;
   budget: number;
 }
 
-interface CampaignTimelineEvent {
+export interface CampaignTimelineEvent {
   id: string;
   timestamp: number;
   category: TimelineCategory;
@@ -23,7 +23,7 @@ interface CampaignTimelineEvent {
   details: string;
 }
 
-interface CampaignSnapshot {
+export interface CampaignSnapshot {
   id: string;
   name: string;
   status: CampaignStatus;
@@ -31,12 +31,32 @@ interface CampaignSnapshot {
   timeline: CampaignTimelineEvent[];
 }
 
-interface CampaignDashboardData {
+export interface CampaignDashboardData {
   updatedAt: number;
   campaigns: CampaignSnapshot[];
 }
 
-type CampaignDashboardFetcher = () => Promise<CampaignDashboardData>;
+export type CampaignDashboardFetcher = () => Promise<CampaignDashboardData>;
+
+export interface ContractCampaignState {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  budget: number;
+  spent: number;
+  tokensBought: number;
+  tokensBurned: number;
+  executionCount: number;
+  auditTrail: CampaignTimelineEvent[];
+}
+
+export interface BackendCampaignProjection {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  metrics: CampaignMetrics & { remainingBudget: number };
+  timeline: CampaignTimelineEvent[];
+}
 
 interface CampaignSeed {
   id: string;
@@ -104,6 +124,38 @@ function formatAgeMs(ageMs: number): string {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   return `${hours}h ago`;
+}
+
+export function projectContractCampaignToBackend(contract: ContractCampaignState): BackendCampaignProjection {
+  const remainingBudget = Math.max(contract.budget - contract.spent, 0);
+  return {
+    id: contract.id,
+    name: contract.name,
+    status: contract.status,
+    metrics: {
+      spent: contract.spent,
+      bought: contract.tokensBought,
+      burned: contract.tokensBurned,
+      budget: contract.budget,
+      remainingBudget,
+    },
+    timeline: contract.auditTrail.slice(),
+  };
+}
+
+export function projectBackendCampaignToSnapshot(projection: BackendCampaignProjection): CampaignSnapshot {
+  return {
+    id: projection.id,
+    name: projection.name,
+    status: projection.status,
+    metrics: {
+      spent: projection.metrics.spent,
+      bought: projection.metrics.bought,
+      burned: projection.metrics.burned,
+      budget: projection.metrics.budget,
+    },
+    timeline: projection.timeline.slice(),
+  };
 }
 
 function buildMockCampaign(seed: CampaignSeed, now: number, tick: number): CampaignSnapshot {
@@ -322,23 +374,61 @@ interface CampaignDashboardProps {
   fetchCampaigns?: CampaignDashboardFetcher;
   pollIntervalMs?: number;
   staleAfterMs?: number;
+  isWalletConnected?: boolean;
+  onReconnectWallet?: () => Promise<void> | void;
 }
 
 export default function CampaignDashboard({
   fetchCampaigns = mockCampaignDashboardFetcher,
   pollIntervalMs = 15_000,
   staleAfterMs = 35_000,
+  isWalletConnected = true,
+  onReconnectWallet,
 }: CampaignDashboardProps) {
   const { data, error, isLoading, isFetching, isStale, lastSuccessAt, now, refetch } = useCampaignDashboard(
     fetchCampaigns,
     pollIntervalMs,
     staleAfterMs,
   );
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const refreshLabel = lastSuccessAt ? formatAgeMs(now - lastSuccessAt) : 'never';
 
+  const handleReconnect = useCallback(async () => {
+    if (!onReconnectWallet) return;
+    setIsReconnecting(true);
+    try {
+      await onReconnectWallet();
+      await refetch(false);
+    } finally {
+      setIsReconnecting(false);
+    }
+  }, [onReconnectWallet, refetch]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+      {!isWalletConnected && (
+        <Card className="shadow-sm border-amber-300">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-amber-900">Wallet disconnected</h2>
+              <p className="text-sm text-amber-800">
+                Campaign actions are read-only until wallet connection is restored.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleReconnect}
+              loading={isReconnecting}
+              data-testid="wallet-reconnect-button"
+            >
+              Reconnect wallet
+            </Button>
+          </div>
+        </Card>
+      )}
+
       <Card className="shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
