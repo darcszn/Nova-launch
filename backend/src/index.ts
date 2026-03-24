@@ -4,6 +4,8 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import { corsOptions } from "./config/cors";
+import { validateEnv } from "./config/env";
+import { runStartupValidation } from "./config/startupValidation";
 import adminRoutes from "./routes/admin";
 import leaderboardRoutes from "./routes/leaderboard";
 import tokenRoutes from "./routes/tokens";
@@ -13,11 +15,16 @@ import campaignRoutes from "./routes/campaigns";
 import { Database } from "./config/database";
 import { successResponse, errorResponse } from "./utils/response";
 import { requestLoggingMiddleware } from "./middleware/request-logging.middleware";
+import stellarEventListener from "./services/stellarEventListener";
 
 dotenv.config();
 
+// Validate required environment variables before starting the server.
+// This will throw and exit if any required variable is missing or invalid.
+const env = validateEnv();
+
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = env.PORT;
 
 // Request logging middleware (first to capture all requests)
 app.use(requestLoggingMiddleware);
@@ -97,9 +104,14 @@ app.use((req, res) => {
   );
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Admin API server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+
+  // Start event listener only after server (and DB) are ready
+  if (process.env.ENABLE_EVENT_LISTENER === "true") {
+    await stellarEventListener.start();
+  }
 });
 
 export default app;

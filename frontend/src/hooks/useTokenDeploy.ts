@@ -156,7 +156,7 @@ export function useTokenDeploy(network: 'testnet' | 'mainnet', options: UseToken
         try {
             const feeBreakdown = getDeploymentFeeBreakdown(Boolean(metadataUri));
             const feePayment = BigInt(Math.round(feeBreakdown.totalFee * 10_000_000));
-            const serviceResult = await stellarService.deployToken({
+            const result = await stellarService.deployToken({
                 ...params,
                 metadataUri,
                 creatorAddress: params.adminWallet,

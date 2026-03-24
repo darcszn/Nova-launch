@@ -1,6 +1,17 @@
 import { PrismaClient } from "@prisma/client";
+import { performance } from "perf_hooks";
+
 
 const prisma = new PrismaClient();
+
+export interface StepDetail {
+  id: number;
+  stepNumber: number;
+  amount: string;
+  status: "PENDING" | "COMPLETED" | "FAILED";
+  executedAt?: Date;
+  txHash?: string;
+}
 
 export interface CampaignProjection {
   id: string;
@@ -20,6 +31,7 @@ export interface CampaignProjection {
   updatedAt: Date;
   completedAt?: Date;
   cancelledAt?: Date;
+  pausedAt?: Date;
 }
 
 export interface CampaignStats {
@@ -34,6 +46,7 @@ export class CampaignProjectionService {
   async getCampaignById(
     campaignId: number
   ): Promise<CampaignProjection | null> {
+    const start = performance.now();
     const campaign = await prisma.campaign.findUnique({
       where: { campaignId },
       include: {
@@ -43,6 +56,11 @@ export class CampaignProjectionService {
         },
       },
     });
+    const duration = performance.now() - start;
+    if (duration > 100) {
+      console.warn(`[PERF] getCampaignById took ${duration.toFixed(2)}ms`);
+    }
+
 
     if (!campaign) return null;
 
@@ -67,9 +85,52 @@ export class CampaignProjectionService {
     return campaigns.map((c) => this.buildProjection(c));
   }
 
+  async getActiveCampaigns(): Promise<CampaignProjection[]> {
+    const campaigns = await prisma.campaign.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+    });
+    return campaigns.map((c) => this.buildProjection(c));
+  }
+
+  async getCampaignSteps(
+    campaignId: number,
+    limit = 50,
+    offset = 0
+  ): Promise<{ steps: StepDetail[]; total: number }> {
+    const campaign = await prisma.buybackCampaign.findUnique({
+      where: { id: campaignId },
+      include: {
+        steps: {
+          orderBy: { stepNumber: "asc" },
+          take: limit,
+          skip: offset,
+        },
+      },
+    });
+
+    if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+    const total = await prisma.buybackStep.count({
+      where: { campaignId },
+    });
+
+    const steps: StepDetail[] = campaign.steps.map((s) => ({
+      id: s.id,
+      stepNumber: s.stepNumber,
+      amount: s.amount,
+      status: s.status as StepDetail["status"],
+      executedAt: s.executedAt ?? undefined,
+      txHash: s.txHash ?? undefined,
+    }));
+
+    return { steps, total };
+  }
+
   async getCampaignStats(tokenId?: string): Promise<CampaignStats> {
     const where = tokenId ? { tokenId } : {};
 
+    const start = performance.now();
     const [totalCampaigns, activeCampaigns, completedCampaigns, aggregates] =
       await Promise.all([
         prisma.campaign.count({ where }),
@@ -83,6 +144,11 @@ export class CampaignProjectionService {
           },
         }),
       ]);
+    const duration = performance.now() - start;
+    if (duration > 200) {
+      console.warn(`[PERF] getCampaignStats took ${duration.toFixed(2)}ms`);
+    }
+
 
     return {
       totalCampaigns,
@@ -141,6 +207,7 @@ export class CampaignProjectionService {
       updatedAt: campaign.updatedAt,
       completedAt: campaign.completedAt,
       cancelledAt: campaign.cancelledAt,
+      pausedAt: campaign.pausedAt,
     };
   }
 }
