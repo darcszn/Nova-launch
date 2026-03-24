@@ -20,6 +20,7 @@ export interface CampaignProjection {
   updatedAt: Date;
   completedAt?: Date;
   cancelledAt?: Date;
+  pausedAt?: Date;
 }
 
 export interface CampaignStats {
@@ -64,6 +65,14 @@ export class CampaignProjectionService {
       orderBy: { createdAt: "desc" },
     });
 
+    return campaigns.map((c) => this.buildProjection(c));
+  }
+
+  async getActiveCampaigns(): Promise<CampaignProjection[]> {
+    const campaigns = await prisma.campaign.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+    });
     return campaigns.map((c) => this.buildProjection(c));
   }
 
@@ -141,6 +150,7 @@ export class CampaignProjectionService {
       updatedAt: campaign.updatedAt,
       completedAt: campaign.completedAt,
       cancelledAt: campaign.cancelledAt,
+      pausedAt: campaign.pausedAt,
     };
   }
 }

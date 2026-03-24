@@ -250,6 +250,7 @@ model Campaign {
   updatedAt     DateTime       @updatedAt
   completedAt   DateTime?
   cancelledAt   DateTime?
+  pausedAt      DateTime?
 
   executions CampaignExecution[]
 

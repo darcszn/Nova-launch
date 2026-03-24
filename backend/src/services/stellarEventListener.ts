@@ -133,6 +133,12 @@ export class StellarEventListener {
         return;
       }
 
+      // Route buyback campaign events
+      if (this.isBuybackEvent(event)) {
+        await this.processBuybackEvent(event);
+        return;
+      }
+
       // Parse event topic to determine event type
       const eventType = this.parseEventType(event);
 
