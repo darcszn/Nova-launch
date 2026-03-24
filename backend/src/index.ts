@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import { corsOptions } from "./config/cors";
 import { validateEnv } from "./config/env";
+import { runStartupValidation } from "./config/startupValidation";
 import adminRoutes from "./routes/admin";
 import leaderboardRoutes from "./routes/leaderboard";
 import tokenRoutes from "./routes/tokens";
