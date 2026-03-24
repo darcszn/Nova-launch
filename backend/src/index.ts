@@ -15,6 +15,7 @@ import campaignRoutes from "./routes/campaigns";
 import { Database } from "./config/database";
 import { successResponse, errorResponse } from "./utils/response";
 import { requestLoggingMiddleware } from "./middleware/request-logging.middleware";
+import stellarEventListener from "./services/stellarEventListener";
 
 dotenv.config();
 
@@ -104,12 +105,13 @@ app.use((req, res) => {
 });
 
 app.listen(PORT, async () => {
-  // Run dependency reachability checks after the port is bound.
-  // In production this will throw and crash the process if critical deps are down.
-  await runStartupValidation(env);
-
   console.log(`🚀 Admin API server running on port ${PORT}`);
-  console.log(`📊 Environment: ${env.NODE_ENV}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+
+  // Start event listener only after server (and DB) are ready
+  if (process.env.ENABLE_EVENT_LISTENER === "true") {
+    await stellarEventListener.start();
+  }
 });
 
 export default app;
