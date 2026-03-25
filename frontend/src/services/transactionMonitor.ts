@@ -31,6 +31,8 @@ export interface MonitoringSession {
 
 export type StatusCallback = (update: TransactionStatusUpdate) => void;
 export type ErrorCallback = (error: Error) => void;
+/** Called once when a transaction reaches a terminal on-chain state (success or failed). */
+export type PostConfirmationHook = (update: TransactionStatusUpdate) => void;
 
 /**
  * Default monitoring configuration
@@ -50,6 +52,7 @@ export class TransactionMonitor {
     private sessions: Map<string, MonitoringSession> = new Map();
     private statusCallbacks: Map<string, Set<StatusCallback>> = new Map();
     private errorCallbacks: Map<string, Set<ErrorCallback>> = new Map();
+    private postConfirmationHooks: Map<string, Set<PostConfirmationHook>> = new Map();
     private pollTimers: Map<string, NodeJS.Timeout> = new Map();
     private config: MonitoringConfig;
 
@@ -136,6 +139,18 @@ export class TransactionMonitor {
     }
 
     /**
+     * Register a post-confirmation hook that fires once when the transaction
+     * reaches a terminal on-chain state (success or failed).
+     * This is the signal for projection polling to begin.
+     */
+    onConfirmed(transactionHash: string, hook: PostConfirmationHook): void {
+        if (!this.postConfirmationHooks.has(transactionHash)) {
+            this.postConfirmationHooks.set(transactionHash, new Set());
+        }
+        this.postConfirmationHooks.get(transactionHash)!.add(hook);
+    }
+
+    /**
      * Get monitoring session details
      */
     getSession(transactionHash: string): MonitoringSession | undefined {
@@ -174,6 +189,7 @@ export class TransactionMonitor {
             if (status === 'success' || status === 'failed') {
                 this.updateSession(transactionHash, status);
                 this.emitStatus(transactionHash, status);
+                this.emitPostConfirmation(transactionHash, status);
             } else {
                 // Still pending, schedule next poll
                 const delay = this.calculateDelay(session.attempts);
@@ -332,6 +348,29 @@ export class TransactionMonitor {
     }
 
     /**
+     * Emit post-confirmation hooks (fires once on terminal state)
+     */
+    private emitPostConfirmation(
+        transactionHash: string,
+        status: 'success' | 'failed'
+    ): void {
+        const hooks = this.postConfirmationHooks.get(transactionHash);
+        if (!hooks) return;
+        const update: TransactionStatusUpdate = {
+            hash: transactionHash,
+            status,
+            timestamp: Date.now(),
+        };
+        hooks.forEach((hook) => {
+            try { hook(update); } catch (err) {
+                console.error('Error in post-confirmation hook:', err);
+            }
+        });
+        // Fire once — clean up
+        this.postConfirmationHooks.delete(transactionHash);
+    }
+
+    /**
      * Emit status update to all registered callbacks
      */
     private emitStatus(
@@ -388,5 +427,6 @@ export class TransactionMonitor {
         this.sessions.clear();
         this.statusCallbacks.clear();
         this.errorCallbacks.clear();
+        this.postConfirmationHooks.clear();
     }
 }

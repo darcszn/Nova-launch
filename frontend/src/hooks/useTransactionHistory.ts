@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useWallet } from './useWallet';
 import type { TokenInfo } from '../types';
 import { transactionHistoryStorage } from '../services/TransactionHistoryStorage';
 import { fetchTokenHistory, convertBackendToken } from '../services/tokenHistoryApi';
+import { useProjectionRefresh } from './useProjectionRefresh';
 
 export interface Transaction {
   id: string;
@@ -20,6 +21,9 @@ interface UseTransactionHistoryReturn {
   isEmpty: boolean;
   refreshFromBackend: () => Promise<void>;
   isRefreshing: boolean;
+  /** Call after a tx is confirmed on-chain to start projection polling */
+  watchProjection: (txHash: string, tokenAddress: string) => void;
+  projectionStatus: import('./useProjectionRefresh').ProjectionStatus;
 }
 
 /**
@@ -41,6 +45,10 @@ export const useTransactionHistory = (): UseTransactionHistoryReturn => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Projection refresh state — tracks a single pending tx at a time
+  const [watchedTxHash, setWatchedTxHash] = useState<string | null>(null);
+  const watchedTokenAddressRef = useRef<string | null>(null);
 
   // Load local history immediately for optimistic UI
   useEffect(() => {
@@ -100,6 +108,28 @@ export const useTransactionHistory = (): UseTransactionHistoryReturn => {
     refreshFromBackend();
   }, [refreshFromBackend]);
 
+  // Projection refresh — polls backend until the watched token is indexed
+  const { status: projectionStatus } = useProjectionRefresh({
+    txHash: watchedTxHash,
+    check: useCallback(async () => {
+      if (!address || !watchedTokenAddressRef.current) return false;
+      const response = await fetchTokenHistory({ creator: address, limit: 100 });
+      return response.success &&
+        response.data.some(t => t.address === watchedTokenAddressRef.current);
+    }, [address]),
+    onIndexed: useCallback(() => {
+      setWatchedTxHash(null);
+      watchedTokenAddressRef.current = null;
+      refreshFromBackend();
+    }, [refreshFromBackend]),
+  });
+
+  /** Start watching a newly submitted token deploy for backend projection catch-up */
+  const watchProjection = useCallback((txHash: string, tokenAddress: string) => {
+    watchedTokenAddressRef.current = tokenAddress;
+    setWatchedTxHash(txHash);
+  }, []);
+
   // Merge and deduplicate local and backend history
   const mergedHistory = useMemo(() => {
     if (!address) return [];
@@ -136,6 +166,8 @@ export const useTransactionHistory = (): UseTransactionHistoryReturn => {
     isEmpty: mergedHistory.length === 0,
     refreshFromBackend,
     isRefreshing,
+    watchProjection,
+    projectionStatus,
   };
 };
 

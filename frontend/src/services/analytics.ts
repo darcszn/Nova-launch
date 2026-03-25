@@ -119,4 +119,7 @@ export const AnalyticsEvent = {
   TUTORIAL_COMPLETED: 'tutorial_completed',
   TUTORIAL_SKIPPED: 'tutorial_skipped',
   PWA_INSTALLED: 'pwa_installed',
+  // Projection refresh timing
+  PROJECTION_INDEXED: 'projection_refresh_indexed',
+  PROJECTION_FAILED: 'projection_refresh_failed',
 } as const;

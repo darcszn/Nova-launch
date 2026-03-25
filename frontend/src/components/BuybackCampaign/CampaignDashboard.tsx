@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ExecuteStepButton } from './ExecuteStepButton';
 import { StellarService } from '../../services/stellar.service';
 import { mapBuybackCampaign } from '../../services/mappers/buybackCampaignMapper';
-import type { BuybackCampaignModel, BuybackStepModel } from '../../types/campaign';
+import type { BuybackCampaignModel } from '../../types/campaign';
+import { useProjectionRefresh } from '../../hooks/useProjectionRefresh';
+import { campaignApi } from '../../services/campaignApi';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? '';
 
@@ -18,16 +20,14 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   const [campaign, setCampaign] = useState<BuybackCampaignModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // txHash of the most recently submitted step — drives projection polling
+  const [pendingTxHash, setPendingTxHash] = useState<string | null>(null);
 
-  const fetchCampaign = async () => {
+  const fetchCampaign = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/campaigns/${campaignId}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch campaign');
-      }
-
+      if (!response.ok) throw new Error('Failed to fetch campaign');
       const data = await response.json();
       setCampaign(data);
     } catch (err) {
@@ -35,21 +35,35 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [campaignId]);
 
   useEffect(() => {
     fetchCampaign();
-  }, [campaignId]);
+  }, [fetchCampaign]);
 
-  const handleStepSuccess = async (_txHash: string) => {
-    await fetchCampaign();
-  };
+  // Projection refresh — polls until the backend execution count advances
+  const expectedExecutionCount = campaign ? campaign.currentStep + 1 : 0;
+  const { status: projectionStatus, retry: retryProjection } = useProjectionRefresh({
+    txHash: pendingTxHash,
+    check: useCallback(async () => {
+      const projection = await campaignApi.getById(campaignId);
+      return projection.executionCount >= expectedExecutionCount;
+    }, [campaignId, expectedExecutionCount]),
+    onIndexed: useCallback(() => {
+      setPendingTxHash(null);
+      fetchCampaign();
+    }, [fetchCampaign]),
+  });
 
-  const handleStepError = (err: Error) => {
+  const handleStepSuccess = useCallback((txHash: string) => {
+    // Start projection polling — don't re-fetch immediately, wait for backend catch-up
+    setPendingTxHash(txHash);
+  }, []);
+
+  const handleStepError = useCallback((err: Error) => {
     console.error('Step execution failed:', err);
-    // Refresh to reconcile state from chain source of truth
     fetchCampaign();
-  };
+  }, [fetchCampaign]);
 
   if (loading) {
     return (
@@ -130,6 +144,29 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         {campaign.isActive && (
           <div className="mb-6">
             <h3 className="text-lg font-semibold mb-4">Current Step</h3>
+
+            {/* Projection catch-up indicator */}
+            {projectionStatus === 'polling' && (
+              <div className="mb-3 flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-4 py-2">
+                <svg className="animate-spin h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Waiting for backend to index the transaction…
+              </div>
+            )}
+            {projectionStatus === 'failed' && (
+              <div className="mb-3 flex items-center justify-between text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-4 py-2">
+                <span>⚠️ Backend sync timed out — data may be stale</span>
+                <button
+                  onClick={retryProjection}
+                  className="ml-4 text-xs underline hover:no-underline"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             <ExecuteStepButton
               campaignId={campaign.id}
               currentStep={campaign.currentStep}
