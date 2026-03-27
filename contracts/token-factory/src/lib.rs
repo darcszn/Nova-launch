@@ -2052,6 +2052,59 @@ impl TokenFactory {
     ) -> Result<types::BuybackCampaign, Error> {
         storage::get_campaign(&env, campaign_id).ok_or(Error::CampaignNotFound)
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Governance Proposal Functions
+    // ═══════════════════════════════════════════════════════════════════════
+
+    pub fn create_proposal(
+        env: Env,
+        proposer: Address,
+        action_type: types::ActionType,
+        payload: Bytes,
+        start_time: u64,
+        end_time: u64,
+        eta: u64,
+    ) -> Result<u64, Error> {
+        timelock::create_proposal(
+            &env,
+            &proposer,
+            action_type,
+            payload,
+            start_time,
+            end_time,
+            eta,
+        )
+    }
+
+    pub fn vote_proposal(
+        env: Env,
+        voter: Address,
+        proposal_id: u64,
+        support: types::VoteChoice,
+    ) -> Result<(), Error> {
+        timelock::vote_proposal(&env, &voter, proposal_id, support)
+    }
+
+    pub fn finalize_proposal(env: Env, proposal_id: u64) -> Result<(), Error> {
+        timelock::finalize_proposal(&env, proposal_id)
+    }
+
+    pub fn queue_proposal(env: Env, proposal_id: u64) -> Result<(), Error> {
+        timelock::queue_proposal(&env, proposal_id)
+    }
+
+    pub fn execute_proposal(env: Env, proposal_id: u64) -> Result<(), Error> {
+        timelock::execute_proposal(&env, proposal_id)
+    }
+
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Option<types::Proposal> {
+        timelock::get_proposal(&env, proposal_id)
+    }
+
+    pub fn get_vote_counts(env: Env, proposal_id: u64) -> Option<(i128, i128, i128)> {
+        timelock::get_vote_counts(&env, proposal_id)
+    }
 }
 
 // Temporarily disabled - requires create_token implementation

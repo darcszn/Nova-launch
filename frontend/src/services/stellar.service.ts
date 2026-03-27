@@ -665,21 +665,26 @@ export class StellarService {
   }
 
   async propose(params: ProposalParams): Promise<string> {
-    const { proposer, title: _title, description: _description, type: _type, action: _action } = params;
+    const { proposer, type, payload, startTime, endTime, eta } = params;
     try {
       const account = await this.server.getAccount(proposer);
       const contract = this.contractClient || new Contract(STELLAR_CONFIG.factoryContractId);
       
-      // The factory contract exposes update_governance_config for governance changes.
-      // Full on-chain proposal submission requires a dedicated governance contract.
       const tx = new TransactionBuilder(account, {
         fee: BASE_FEE,
         networkPassphrase: this.networkPassphrase,
       })
         .addOperation(
           contract.call(
-            FACTORY_METHODS.update_governance_config,
-            ...mappers.updateGovernanceConfig({ admin: proposer })
+            FACTORY_METHODS.create_proposal,
+            ...mappers.createProposal({
+              proposer,
+              action_type: type,
+              payload,
+              start_time: startTime,
+              end_time: endTime,
+              eta,
+            })
           )
         )
         .setTimeout(180)
@@ -697,19 +702,27 @@ export class StellarService {
   }
 
   async vote(params: VoteParams): Promise<string> {
-    const { voter, proposalId: _proposalId, support: _support, reason: _reason } = params;
+    const { voter, proposalId, support } = params;
     try {
       const account = await this.server.getAccount(voter);
       const contract = this.contractClient || new Contract(STELLAR_CONFIG.factoryContractId);
       
-      // The factory contract exposes is_quorum_met / is_approval_met for vote queries.
-      // Submitting a vote requires a dedicated governance contract.
+      // VoteChoice: For=0, Against=1, Abstain=2
+      const choice = support ? 0 : 1;
+
       const tx = new TransactionBuilder(account, {
         fee: BASE_FEE,
         networkPassphrase: this.networkPassphrase,
       })
         .addOperation(
-          contract.call(FACTORY_METHODS.get_governance_config)
+          contract.call(
+            FACTORY_METHODS.vote_proposal,
+            ...mappers.voteProposal({
+              voter,
+              proposal_id: BigInt(proposalId),
+              support: choice,
+            })
+          )
         )
         .setTimeout(180)
         .build();
@@ -723,6 +736,61 @@ export class StellarService {
     } catch (error) {
       throw this.handleError(error, 'vote');
     }
+  }
+
+  async finalizeProposal(voter: string, proposalId: number): Promise<string> {
+    return this.invokeProposalMethod(voter, proposalId, FACTORY_METHODS.finalize_proposal);
+  }
+
+  async queueProposal(voter: string, proposalId: number): Promise<string> {
+    return this.invokeProposalMethod(voter, proposalId, FACTORY_METHODS.queue_proposal);
+  }
+
+  async executeProposal(voter: string, proposalId: number): Promise<string> {
+    return this.invokeProposalMethod(voter, proposalId, FACTORY_METHODS.execute_proposal);
+  }
+
+  private async invokeProposalMethod(
+    caller: string,
+    proposalId: number,
+    method: string
+  ): Promise<string> {
+    try {
+      const account = await this.server.getAccount(caller);
+      const contract = this.contractClient || new Contract(STELLAR_CONFIG.factoryContractId);
+      
+      const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(
+          contract.call(method, ...mappers.proposalId(BigInt(proposalId)))
+        )
+        .setTimeout(180)
+        .build();
+
+      const prepared = await this.server.prepareTransaction(tx);
+      const signedXdr = await this.signWithWallet(prepared.toXDR());
+      const signedTx = TransactionBuilder.fromXDR(signedXdr, this.networkPassphrase) as Transaction;
+      
+      const response = await this.server.sendTransaction(signedTx);
+      return response.hash;
+    } catch (error) {
+      throw this.handleError(error, method);
+    }
+  }
+
+  async getProposal(proposalId: number): Promise<any> {
+    return this.simulateRead(FACTORY_METHODS.get_proposal, mappers.proposalId(BigInt(proposalId)));
+  }
+
+  async getVoteCounts(proposalId: number): Promise<{ for: bigint; against: bigint; abstain: bigint }> {
+    const raw = await this.simulateRead(FACTORY_METHODS.get_vote_counts, mappers.proposalId(BigInt(proposalId))) as [bigint, bigint, bigint];
+    return {
+      for: raw[0],
+      against: raw[1],
+      abstain: raw[2],
+    };
   }
 
   private handleError(error: any, action: string): AppError {

@@ -12,6 +12,8 @@ import type {
   CreateBuybackCampaignParams,
   UpdateGovernanceConfigParams,
   InitializeParams,
+  CreateProposalParams,
+  VoteProposalParams,
 } from './factoryAbi';
 
 /** address string → ScVal */
@@ -26,6 +28,10 @@ const i128 = (n: bigint) => nativeToScVal(n, { type: 'i128' });
 const str = (s: string) => nativeToScVal(s, { type: 'string' });
 /** bool → ScVal */
 const bool = (b: boolean) => nativeToScVal(b, { type: 'bool' });
+/** bytes → ScVal */
+const bytes = (b: Buffer | Uint8Array) => nativeToScVal(b, { type: 'bytes' });
+/** enum (u32) → ScVal */
+const enumVal = (v: number) => nativeToScVal(v, { type: 'u32' });
 /** Option<T> → ScVal (void when undefined) */
 const opt = (v: xdr.ScVal | undefined): xdr.ScVal =>
   v ?? xdr.ScVal.scvVoid();
@@ -106,6 +112,26 @@ export const mappers = {
     opt(p.quorum_percent !== undefined ? u32(p.quorum_percent) : undefined),
     opt(p.approval_percent !== undefined ? u32(p.approval_percent) : undefined),
   ],
+
+  /** create_proposal(proposer, action_type, payload, start_time, end_time, eta) */
+  createProposal: (p: CreateProposalParams): xdr.ScVal[] => [
+    addr(p.proposer),
+    enumVal(p.action_type),
+    bytes(p.payload),
+    u64(p.start_time),
+    u64(p.end_time),
+    u64(p.eta),
+  ],
+
+  /** vote_proposal(voter, proposal_id, support) */
+  voteProposal: (p: VoteProposalParams): xdr.ScVal[] => [
+    addr(p.voter),
+    u64(p.proposal_id),
+    enumVal(p.support),
+  ],
+
+  /** proposal_id: u64 methods */
+  proposalId: (proposalId: bigint): xdr.ScVal[] => [u64(proposalId)],
 
   /** is_paused() — no args */
   isPaused: (): xdr.ScVal[] => [],

@@ -178,3 +178,5 @@ export interface RecurringPaymentFilters {
     tokenAddress?: string;
     search?: string;
 }
+
+export * from './governance';

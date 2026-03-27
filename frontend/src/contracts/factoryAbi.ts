@@ -61,6 +61,13 @@ export const FACTORY_METHODS = {
   update_governance_config: 'update_governance_config',
   is_quorum_met: 'is_quorum_met',
   is_approval_met: 'is_approval_met',
+  create_proposal: 'create_proposal',
+  vote_proposal: 'vote_proposal',
+  finalize_proposal: 'finalize_proposal',
+  queue_proposal: 'queue_proposal',
+  execute_proposal: 'execute_proposal',
+  get_proposal: 'get_proposal',
+  get_vote_counts: 'get_vote_counts',
 
   // Timelock
   schedule_fee_update: 'schedule_fee_update',
@@ -158,4 +165,21 @@ export interface UpdateGovernanceConfigParams {
   admin: string;
   quorum_percent?: number;   // Option<u32>
   approval_percent?: number; // Option<u32>
+}
+
+/** Matches `create_proposal(proposer, action_type, payload, start_time, end_time, eta)` */
+export interface CreateProposalParams {
+  proposer: string;          // Address
+  action_type: number;       // ActionType (enum index)
+  payload: Buffer | Uint8Array; // Bytes
+  start_time: bigint;        // u64
+  end_time: bigint;          // u64
+  eta: bigint;               // u64
+}
+
+/** Matches `vote_proposal(voter, proposal_id, support)` */
+export interface VoteProposalParams {
+  voter: string;             // Address
+  proposal_id: bigint;       // u64
+  support: number;           // VoteChoice (enum index: For=0, Against=1, Abstain=2)
 }
