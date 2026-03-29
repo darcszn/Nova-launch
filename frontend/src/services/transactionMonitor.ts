@@ -3,6 +3,8 @@
  * Handles polling and status updates for Stellar transactions
  */
 
+import { isRetryableError, calculateBackoffDelay, USER_RETRY_CONFIG } from '../utils/retry';
+
 export interface TransactionStatusUpdate {
     hash: string;
     status: 'pending' | 'success' | 'failed' | 'timeout';
@@ -210,7 +212,7 @@ export class TransactionMonitor {
                 this.emitStatus(transactionHash, status);
                 this.emitPostConfirmation(transactionHash, status);
             } else {
-                // Still pending, schedule next poll
+                // Still pending, schedule next poll with exponential backoff
                 const delay = this.calculateDelay(session.attempts);
                 const timer = setTimeout(
                     () => this.poll(transactionHash),
@@ -220,11 +222,24 @@ export class TransactionMonitor {
             }
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
+            
+            // Check if error is retryable
+            const retryable = isRetryableError(error);
+            
+            if (!retryable) {
+                // Terminal error - stop monitoring and surface to UI
+                this.updateSession(transactionHash, 'failed', undefined, err.message);
+                this.emitStatus(transactionHash, 'failed', err.message);
+                this.emitError(transactionHash, err);
+                return;
+            }
+            
+            // Transient error - emit error but continue retrying
             this.emitError(transactionHash, err);
 
-            // Schedule retry
+            // Schedule retry with backoff
             if (session.attempts < this.config.maxRetries) {
-                const delay = this.calculateDelay(session.attempts);
+                const delay = calculateBackoffDelay(session.attempts, USER_RETRY_CONFIG);
                 const timer = setTimeout(
                     () => this.poll(transactionHash),
                     delay

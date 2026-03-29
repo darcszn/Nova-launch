@@ -9,6 +9,12 @@ import { TokenEventParser, RawTokenEvent } from "./tokenEventParser";
 import { EventCursorStore } from "./eventCursorStore";
 import { StreamEventParser } from "./streamEventParser";
 import { parseVaultCreatedEvent, parseVaultClaimedEvent, parseVaultCancelledEvent, parseVaultMetadataUpdatedEvent } from "./vaultEventParser";
+import { 
+  BACKGROUND_RETRY_CONFIG,
+  calculateBackoffDelay,
+  isRetryableError,
+  sleep
+} from "../stellar-service-integration/rate-limiter";
 
 const _env = validateEnv();
 const HORIZON_URL = _env.STELLAR_HORIZON_URL;
@@ -94,15 +100,51 @@ export class StellarEventListener {
    * Poll for new events
    */
   private async pollEvents(): Promise<void> {
+    let consecutiveFailures = 0;
+    const maxConsecutiveFailures = 5;
+
     while (this.isRunning) {
       try {
         await this.fetchAndProcessEvents();
+        consecutiveFailures = 0; // Reset on success
       } catch (error) {
-        console.error("Error polling events:", error);
+        consecutiveFailures++;
+        
+        const isTransient = isRetryableError(error);
+        
+        if (isTransient) {
+          console.warn(
+            `Transient error polling events (failure ${consecutiveFailures}/${maxConsecutiveFailures}):`,
+            error instanceof Error ? error.message : String(error)
+          );
+          
+          // Use exponential backoff for transient errors
+          const backoffDelay = calculateBackoffDelay(
+            Math.min(consecutiveFailures, BACKGROUND_RETRY_CONFIG.maxAttempts),
+            BACKGROUND_RETRY_CONFIG
+          );
+          
+          console.log(`Backing off for ${Math.round(backoffDelay)}ms before next poll`);
+          await sleep(backoffDelay);
+          
+          // If too many consecutive failures, alert but continue
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            console.error(
+              `Event listener has failed ${consecutiveFailures} times consecutively. ` +
+              `Continuing with extended backoff.`
+            );
+          }
+        } else {
+          // Terminal error - log and continue with normal polling
+          console.error("Terminal error polling events (will continue):", error);
+          consecutiveFailures = 0; // Reset since it's not a transient issue
+        }
       }
 
-      // Wait before next poll
-      await this.delay(POLL_INTERVAL_MS);
+      // Wait before next poll (normal interval or already backed off above)
+      if (consecutiveFailures === 0) {
+        await this.delay(POLL_INTERVAL_MS);
+      }
     }
   }
 
@@ -110,18 +152,22 @@ export class StellarEventListener {
    * Fetch and process new events from Horizon
    */
   private async fetchAndProcessEvents(): Promise<void> {
+    const url = `${HORIZON_URL}/contracts/${FACTORY_CONTRACT_ID}/events`;
+    const params: any = {
+      limit: 100,
+      order: "asc",
+    };
+
+    if (this.lastCursor) {
+      params.cursor = this.lastCursor;
+    }
+
     try {
-      const url = `${HORIZON_URL}/contracts/${FACTORY_CONTRACT_ID}/events`;
-      const params: any = {
-        limit: 100,
-        order: "asc",
-      };
-
-      if (this.lastCursor) {
-        params.cursor = this.lastCursor;
-      }
-
-      const response = await axios.get(url, { params });
+      const response = await axios.get(url, { 
+        params,
+        timeout: 30000, // 30 second timeout
+      });
+      
       const events: StellarEvent[] = response.data._embedded?.records || [];
 
       if (events.length === 0) {
@@ -136,7 +182,23 @@ export class StellarEventListener {
         await this.cursorStore.save(this.lastCursor);
       }
     } catch (error) {
+      // Enhance error with context for better retry decisions
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        if (status === 429) {
+          console.warn("Rate limited by Horizon API (429)");
+          throw error; // Will be retried with backoff
+        } else if (status && status >= 500) {
+          console.warn(`Horizon API server error (${status})`);
+          throw error; // Will be retried with backoff
+        } else if (status && status >= 400 && status < 500) {
+          console.error(`Horizon API client error (${status}):`, error.message);
+          throw error; // Terminal error, won't retry
+        }
+      }
+      
       console.error("Error fetching events:", error);
+      throw error;
     }
   }
 

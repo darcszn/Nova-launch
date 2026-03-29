@@ -1,0 +1,45 @@
+feat(integration): add retry and rate-limit handling for stellar clients (issue-634)
+
+Implement comprehensive retry and rate-limiting strategy for all Stellar
+Horizon and Soroban RPC calls across frontend and backend.
+
+Key Features:
+- Bounded retries with exponential backoff and jitter
+- Differentiate user-path (fast, 3 attempts) from background (resilient, 10 attempts)
+- Smart error classification (retryable vs terminal)
+- Rate limiting (50 req/min frontend, 100 req/min backend)
+- Responsive UI error states for user operations
+- Resilient polling for background event ingestion
+
+Files Created:
+- docs/STELLAR_RETRY_POLICY.md - Complete policy documentation
+- frontend/src/utils/retry.ts - Retry utilities and rate limiter
+- frontend/src/services/__tests__/stellar-retry-policy.test.ts - Frontend tests
+- backend/src/__tests__/stellarEventListener.retry.test.ts - Backend tests
+
+Files Modified:
+- backend/src/stellar-service-integration/rate-limiter.ts - Add retry utilities
+- backend/src/stellar-service-integration/stellar.service.ts - Enhanced withRetry
+- backend/src/services/stellarEventListener.ts - Resilient polling
+- frontend/src/services/transactionMonitor.ts - Smart error handling
+
+Retryable Errors:
+- 429 Too Many Requests
+- 5xx Server Errors (500, 502, 503, 504)
+- Network errors (ECONNRESET, ETIMEDOUT, ENOTFOUND)
+- Transaction NOT_FOUND (during polling)
+
+Terminal Errors (No Retry):
+- 4xx Client Errors (400, 401, 403, 404, 422)
+- Transaction FAILED
+- Validation errors
+
+Test Coverage:
+- Error classification and retry logic
+- Backoff calculation with jitter
+- Rate limiter functionality
+- Resilient polling behavior
+- User-path vs background differentiation
+- Performance characteristics
+
+Closes issue-634
