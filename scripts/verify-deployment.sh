@@ -105,3 +105,14 @@ fi
 echo -e "\n4. Verification Complete!"
 echo "================================================"
 echo "All checks passed successfully."
+
+# Run the production readiness gate for a full integration check.
+# Pass --backend-url if BACKEND_URL is set; otherwise the gate uses its default.
+echo ""
+echo "Running production readiness gate..."
+GATE_ARGS="--network $STELLAR_NETWORK"
+if [ -n "${BACKEND_URL:-}" ]; then
+  GATE_ARGS="$GATE_ARGS --backend-url $BACKEND_URL"
+fi
+# shellcheck disable=SC2086
+"$(dirname "$0")/run-production-readiness-gate.sh" $GATE_ARGS

@@ -6,6 +6,7 @@ import {
   WebhookEventData,
 } from "../types/webhook";
 import webhookService from "./webhookService";
+import { IntegrationMetrics } from "../../../monitoring/metrics/prometheus-config";
 
 const TIMEOUT_MS = parseInt(process.env.WEBHOOK_TIMEOUT_MS || "5000");
 const MAX_RETRIES = parseInt(process.env.WEBHOOK_MAX_RETRIES || "3");
@@ -68,6 +69,7 @@ export class WebhookDeliveryService {
     let statusCode: number | null = null;
     let success = false;
     let attempts = 0;
+    const startMs = Date.now();
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       attempts = attempt;
@@ -120,6 +122,12 @@ export class WebhookDeliveryService {
         }
       }
     }
+
+    // Emit delivery metrics
+    const durationMs = Date.now() - startMs;
+    const retries = attempts - 1;
+    const outcome = success ? 'success' : (attempts >= MAX_RETRIES ? 'exhausted' : 'failed');
+    IntegrationMetrics.recordWebhookDelivery(event, outcome, durationMs, retries);
 
     // Log the delivery attempt
     await webhookService.logDelivery(

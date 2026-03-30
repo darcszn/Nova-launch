@@ -91,6 +91,17 @@ else
     echo ""
 fi
 
+# Integration gate (ABI + contract ID format only — no live network needed in CI)
+echo "=== Integration Gate (Static Checks) ==="
+run_check "Contract ABI completeness" "
+  ABI_FILE=src/contracts/factoryAbi.ts
+  FAIL=0
+  for method in create_token burn set_metadata mint_tokens get_state get_base_fee get_metadata_fee; do
+    grep -q \"\$method\" \"\$ABI_FILE\" || { echo \"ABI missing: \$method\"; FAIL=1; }
+  done
+  exit \$FAIL
+" "frontend"
+
 # Summary
 echo "=== Summary ==="
 if [ $FAILED -eq 0 ]; then

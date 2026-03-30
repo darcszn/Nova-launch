@@ -267,6 +267,109 @@ export const errorRate = new client.Gauge({
 });
 
 /**
+ * Integration Pipeline Metrics
+ * Covers: wallet submission, chain confirmation latency, ingestion lag, webhook reliability
+ */
+
+/** wallet_submission_total — counts submit attempts by action and outcome */
+export const walletSubmissionTotal = new client.Counter({
+  name: 'nova_launch_wallet_submission_total',
+  help: 'Total wallet transaction submissions by action and outcome',
+  labelNames: ['action', 'outcome'], // outcome: success | simulation_failed | wallet_rejected | network_error
+  registers: [register],
+});
+
+/** tx_confirmation_duration_seconds — time from submission to on-chain confirmation */
+export const txConfirmationDuration = new client.Histogram({
+  name: 'nova_launch_tx_confirmation_duration_seconds',
+  help: 'Time from wallet submission to on-chain confirmation',
+  labelNames: ['action', 'outcome'], // outcome: success | failed | timeout
+  buckets: [1, 3, 5, 10, 20, 30, 60, 120],
+  registers: [register],
+});
+
+/** event_ingestion_lag_seconds — ledger close time vs. time the backend processed the event */
+export const eventIngestionLag = new client.Histogram({
+  name: 'nova_launch_event_ingestion_lag_seconds',
+  help: 'Lag between ledger close time and backend event processing time',
+  labelNames: ['event_kind'],
+  buckets: [1, 2, 5, 10, 30, 60, 120, 300],
+  registers: [register],
+});
+
+/** events_processed_total — total events ingested by kind and outcome */
+export const eventsProcessedTotal = new client.Counter({
+  name: 'nova_launch_events_processed_total',
+  help: 'Total Stellar events processed by kind and outcome',
+  labelNames: ['event_kind', 'outcome'], // outcome: success | error
+  registers: [register],
+});
+
+/** webhook_delivery_total — delivery attempts by event type and outcome */
+export const webhookDeliveryTotal = new client.Counter({
+  name: 'nova_launch_webhook_delivery_total',
+  help: 'Total webhook delivery attempts by event type and outcome',
+  labelNames: ['event_type', 'outcome'], // outcome: success | failed | exhausted
+  registers: [register],
+});
+
+/** webhook_retry_total — retry attempts (excludes first attempt) */
+export const webhookRetryTotal = new client.Counter({
+  name: 'nova_launch_webhook_retry_total',
+  help: 'Total webhook retry attempts (excludes first attempt)',
+  labelNames: ['event_type'],
+  registers: [register],
+});
+
+/** webhook_delivery_duration_seconds — time to first successful delivery */
+export const webhookDeliveryDuration = new client.Histogram({
+  name: 'nova_launch_webhook_delivery_duration_seconds',
+  help: 'Time to first successful webhook delivery per subscription',
+  labelNames: ['event_type', 'outcome'],
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 30],
+  registers: [register],
+});
+
+export class IntegrationMetrics {
+  /** Record a wallet submission attempt */
+  static recordWalletSubmission(action: string, outcome: 'success' | 'simulation_failed' | 'wallet_rejected' | 'network_error'): void {
+    walletSubmissionTotal.inc({ action, outcome });
+  }
+
+  /** Record time from submission to confirmation */
+  static recordTxConfirmation(action: string, outcome: 'success' | 'failed' | 'timeout', durationMs: number): void {
+    txConfirmationDuration.observe({ action, outcome }, durationMs / 1000);
+  }
+
+  /** Record ingestion lag for a processed event */
+  static recordIngestionLag(eventKind: string, ledgerCloseTimeIso: string): void {
+    const lagMs = Date.now() - new Date(ledgerCloseTimeIso).getTime();
+    if (lagMs >= 0) {
+      eventIngestionLag.observe({ event_kind: eventKind }, lagMs / 1000);
+    }
+  }
+
+  /** Record a processed event */
+  static recordEventProcessed(eventKind: string, outcome: 'success' | 'error'): void {
+    eventsProcessedTotal.inc({ event_kind: eventKind, outcome });
+  }
+
+  /** Record a webhook delivery outcome */
+  static recordWebhookDelivery(
+    eventType: string,
+    outcome: 'success' | 'failed' | 'exhausted',
+    durationMs: number,
+    retries: number
+  ): void {
+    webhookDeliveryTotal.inc({ event_type: eventType, outcome });
+    webhookDeliveryDuration.observe({ event_type: eventType, outcome }, durationMs / 1000);
+    if (retries > 0) {
+      webhookRetryTotal.inc({ event_type: eventType }, retries);
+    }
+  }
+}
+
+/**
  * Background Job Metrics
  */
 export const jobExecutionDuration = new client.Histogram({

@@ -16,6 +16,7 @@ import {
   isRetryableError,
   sleep
 } from "../stellar-service-integration/rate-limiter";
+import { IntegrationMetrics } from "../../../monitoring/metrics/prometheus-config";
 
 const _env = validateEnv();
 const HORIZON_URL = _env.STELLAR_HORIZON_URL;
@@ -224,18 +225,24 @@ export class StellarEventListener {
         if (governanceEvent) {
           await this.governanceParser.parseEvent(governanceEvent);
         }
+        IntegrationMetrics.recordIngestionLag(kind, event.ledger_close_time);
+        IntegrationMetrics.recordEventProcessed(kind, 'success');
         return;
       }
 
       // ── Vault / Stream ──────────────────────────────────────────────────
       if (kind.startsWith('vault_')) {
         await this.processStreamOrVaultEvent(event);
+        IntegrationMetrics.recordIngestionLag(kind, event.ledger_close_time);
+        IntegrationMetrics.recordEventProcessed(kind, 'success');
         return;
       }
 
       // ── Campaign ────────────────────────────────────────────────────────
       if (kind.startsWith('campaign_')) {
         await this.processBuybackEvent(event);
+        IntegrationMetrics.recordIngestionLag(kind, event.ledger_close_time);
+        IntegrationMetrics.recordEventProcessed(kind, 'success');
         return;
       }
 
@@ -253,8 +260,13 @@ export class StellarEventListener {
           await webhookDeliveryService.triggerEvent(webhookType, eventData, eventData.tokenAddress);
         }
       }
+
+      IntegrationMetrics.recordIngestionLag(kind, event.ledger_close_time);
+      IntegrationMetrics.recordEventProcessed(kind, 'success');
     } catch (error) {
       console.error("Error processing event:", error);
+      const kind = kindForTopic(event.topic?.[0] ?? '') ?? 'unknown';
+      IntegrationMetrics.recordEventProcessed(kind, 'error');
     }
   }
 
@@ -485,6 +497,25 @@ export class StellarEventListener {
    */
   private async processBuybackEvent(event: StellarEvent): Promise<void> {
      // Placeholder for buyback processing logic
+  }
+
+  /**
+   * Replay a recorded batch of Stellar events through the full ingestion pipeline.
+   * Intended for integration tests and offline replay tooling — not for production polling.
+   */
+  async replayBatch(events: StellarEvent[]): Promise<{ processed: number; errors: number }> {
+    let processed = 0;
+    let errors = 0;
+    for (const event of events) {
+      try {
+        await this.processEvent(event);
+        processed++;
+      } catch (err) {
+        errors++;
+        console.error(`replayBatch: error on event ${event.id}:`, err);
+      }
+    }
+    return { processed, errors };
   }
 
   /**
